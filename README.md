@@ -12,6 +12,8 @@ A Quickshell utility for assigning image and video wallpapers per Hyprland works
 - Video reference-frame selection for Caelestia theming
 - Draggable video timeline with generated frame thumbnails
 - Configurable video thumbnail interval, defaulting to 5 seconds
+- JSON config import and export
+- Portable ZIP import and export with referenced media assets
 - Uses `caelestia wallpaper -f`
 - Adaptive Caelestia colors
 - Desktop launcher included
@@ -75,6 +77,9 @@ scripts/workspace-wallpaper-config
 
 scripts/workspace-wallpaper-media
   -> ~/.config/caelestia/scripts/workspace-wallpaper-media
+
+scripts/workspace-wallpaper-transfer
+  -> ~/.config/caelestia/scripts/workspace-wallpaper-transfer
 
 desktop/workspace-wallpapers.desktop
   -> ~/.local/share/applications/workspace-wallpapers.desktop

@@ -45,6 +45,10 @@ install -m 0755 \
     "$ROOT/scripts/workspace-wallpaper-media" \
     "$CAELESTIA_SCRIPTS/workspace-wallpaper-media"
 
+install -m 0755 \
+    "$ROOT/scripts/workspace-wallpaper-transfer" \
+    "$CAELESTIA_SCRIPTS/workspace-wallpaper-transfer"
+
 install -m 0644 \
     "$ROOT/desktop/workspace-wallpapers.desktop" \
     "$APP_DIR/workspace-wallpapers.desktop"

@@ -1,5 +1,6 @@
 import QtQuick as QQ
 import QtQuick.Controls as Controls
+import QtQuick.Dialogs as Dialogs
 import QtQuick.Layouts as Layouts
 
 import Quickshell
@@ -37,6 +38,9 @@ ShellRoot {
     property string mediaHelperPath:
         home + "/.config/caelestia/scripts/workspace-wallpaper-media"
 
+    property string transferHelperPath:
+        home + "/.config/caelestia/scripts/workspace-wallpaper-transfer"
+
     property var configData: ({
         "default": "",
         "workspaces": ({})
@@ -64,6 +68,8 @@ ShellRoot {
     property bool pendingSelectionDefault: false
     property string configWriteError: ""
     property string mediaError: ""
+    property string transferStatus: ""
+    property bool transferImporting: false
 
     property bool videoEditorOpen: false
     property string selectedVideoPath: ""
@@ -109,6 +115,8 @@ ShellRoot {
         colour("outlineVariant", "#3d3d46")
     readonly property var primary:
         colour("primary", "#c9bfff")
+    readonly property var textPrimary:
+        colour("onPrimary", "#211a4b")
     readonly property var primaryContainer:
         colour("primaryContainer", "#48406f")
     readonly property var textPrimaryContainer:
@@ -309,6 +317,33 @@ ShellRoot {
     function rescanMedia() {
         if (!mediaScanner.running)
             mediaScanner.exec([mediaHelperPath, "scan"])
+    }
+
+    function localPath(fileUrl) {
+        const value = String(fileUrl)
+        return decodeURIComponent(value.replace(/^file:\/\//, ""))
+    }
+
+    function runTransfer(action, fileUrl) {
+        if (transferProcess.running || !fileUrl)
+            return
+
+        transferStatus = "Working…"
+        transferImporting = action.startsWith("import-")
+        transferProcess.exec([
+            transferHelperPath,
+            action,
+            localPath(fileUrl)
+        ])
+    }
+
+    function openExportJsonDialog() {
+        const folder = configPath.slice(0, configPath.lastIndexOf("/"))
+
+        exportJsonDialog.currentFolder = fileUrl(folder)
+        exportJsonDialog.currentFile = fileUrl(configPath)
+        exportJsonDialog.selectedFile = fileUrl(configPath)
+        exportJsonDialog.open()
     }
 
     function scrollPickerIntoView() {
@@ -714,6 +749,40 @@ ShellRoot {
     }
 
     Process {
+        id: transferProcess
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                const message = text.trim()
+
+                if (message.length > 0)
+                    root.transferStatus = message
+            }
+        }
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const message = text.trim()
+
+                if (message.length > 0)
+                    root.transferStatus = message
+            }
+        }
+
+        onExited: function(exitCode) {
+            if (exitCode === 0 && root.transferImporting) {
+                configFile.reload()
+                root.rescanMedia()
+
+                if (Hyprland.focusedWorkspace)
+                    root.applyWorkspace(Hyprland.focusedWorkspace.id)
+            }
+
+            root.transferImporting = false
+        }
+    }
+
+    Process {
         id: mediaScanner
 
         command: [
@@ -838,6 +907,66 @@ ShellRoot {
             anchors.fill: parent
             color: root.surface
 
+            Dialogs.FileDialog {
+                id: importJsonDialog
+
+                title: "Import workspace wallpaper config"
+                fileMode: Dialogs.FileDialog.OpenFile
+                currentFolder: root.fileUrl(root.home)
+                nameFilters: ["JSON config (*.json)"]
+
+                onAccepted:
+                    root.runTransfer("import-json", selectedFile)
+            }
+
+            Dialogs.FileDialog {
+                id: importZipDialog
+
+                title: "Import workspace wallpaper bundle"
+                fileMode: Dialogs.FileDialog.OpenFile
+                currentFolder: root.fileUrl(root.home)
+                nameFilters: ["ZIP bundle (*.zip)"]
+
+                onAccepted:
+                    root.runTransfer("import-zip", selectedFile)
+            }
+
+            Dialogs.FileDialog {
+                id: exportJsonDialog
+
+                title: "Export workspace wallpaper config"
+                fileMode: Dialogs.FileDialog.SaveFile
+                currentFolder:
+                    root.fileUrl(
+                        root.configPath.slice(
+                            0,
+                            root.configPath.lastIndexOf("/")
+                        )
+                    )
+                currentFile: root.fileUrl(root.configPath)
+                selectedFile: root.fileUrl(root.configPath)
+                defaultSuffix: "json"
+                nameFilters: ["JSON config (*.json)"]
+
+                onAccepted:
+                    root.runTransfer("export-json", selectedFile)
+            }
+
+            Dialogs.FileDialog {
+                id: exportZipDialog
+
+                title: "Export workspace wallpaper bundle"
+                fileMode: Dialogs.FileDialog.SaveFile
+                currentFolder: root.fileUrl(root.home)
+                selectedFile:
+                    root.fileUrl(root.home + "/workspace-wallpapers.zip")
+                defaultSuffix: "zip"
+                nameFilters: ["ZIP bundle (*.zip)"]
+
+                onAccepted:
+                    root.runTransfer("export-zip", selectedFile)
+            }
+
             Layouts.ColumnLayout {
                 anchors.fill: parent
                 spacing: 0
@@ -886,6 +1015,418 @@ ShellRoot {
                             anchors.topMargin: 20
 
                             spacing: 18
+
+                            Layouts.RowLayout {
+                                Layouts.Layout.fillWidth: true
+                                spacing: 8
+
+                                Controls.Label {
+                                    Layouts.Layout.fillWidth: true
+
+                                    text: root.transferStatus
+                                    color: root.textSurfaceVariant
+                                    font.pixelSize: 11
+                                    elide: QQ.Text.ElideRight
+                                }
+
+                                QQ.Row {
+                                    id: transferSplitButton
+
+                                    spacing: 3
+
+                                    QQ.Rectangle {
+                                        id: importJsonButton
+
+                                        width: 154
+                                        height: 42
+                                        radius: 21
+
+                                        color:
+                                            !importJsonMouse.enabled
+                                                ? Qt.alpha(root.primary, 0.38)
+                                                : importJsonMouse.pressed
+                                                    ? Qt.darker(root.primary, 1.12)
+                                                    : importJsonMouse.containsMouse
+                                                        ? Qt.lighter(root.primary, 1.06)
+                                                        : root.primary
+
+                                        Layouts.RowLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 8
+
+                                            Controls.Label {
+                                                text: "file_open"
+                                                color:
+                                                    importJsonMouse.enabled
+                                                        ? root.textPrimary
+                                                        : Qt.alpha(root.textSurface, 0.38)
+                                                font.family:
+                                                    "Material Symbols Rounded"
+                                                font.pixelSize: 19
+                                            }
+
+                                            Controls.Label {
+                                                text: "Import (JSON)"
+                                                color:
+                                                    importJsonMouse.enabled
+                                                        ? root.textPrimary
+                                                        : Qt.alpha(root.textSurface, 0.38)
+                                                font.pixelSize: 13
+                                                font.weight: 600
+                                            }
+                                        }
+
+                                        QQ.MouseArea {
+                                            id: importJsonMouse
+
+                                            anchors.fill: parent
+                                            enabled: !transferProcess.running
+                                            hoverEnabled: true
+                                            cursorShape:
+                                                enabled
+                                                    ? Qt.PointingHandCursor
+                                                    : Qt.ArrowCursor
+
+                                            onClicked:
+                                                importJsonDialog.open()
+
+                                            Controls.ToolTip.visible:
+                                                containsMouse
+
+                                            Controls.ToolTip.delay: 500
+
+                                            Controls.ToolTip.text:
+                                                "Import only a workspace wallpapers config."
+                                        }
+
+                                        QQ.Behavior on color {
+                                            QQ.ColorAnimation {
+                                                duration: 120
+                                            }
+                                        }
+                                    }
+
+                                    QQ.Rectangle {
+                                        id: transferMenuButton
+
+                                        width: 42
+                                        height: 42
+                                        radius: 21
+
+                                        color:
+                                            !transferMenuMouse.enabled
+                                                ? Qt.alpha(root.primary, 0.38)
+                                                : transferMenuMouse.pressed
+                                                    ? Qt.darker(root.primary, 1.12)
+                                                    : transferMenu.visible || transferMenuMouse.containsMouse
+                                                        ? Qt.lighter(root.primary, 1.06)
+                                                        : root.primary
+
+                                        Controls.Label {
+                                            anchors.centerIn: parent
+                                            anchors.verticalCenterOffset: 1
+
+                                            text: "expand_more"
+                                            color:
+                                                transferMenuMouse.enabled
+                                                    ? root.textPrimary
+                                                    : Qt.alpha(root.textSurface, 0.38)
+                                            font.family:
+                                                "Material Symbols Rounded"
+                                            font.pixelSize: 21
+                                            rotation:
+                                                transferMenu.visible ? 180 : 0
+
+                                            QQ.Behavior on rotation {
+                                                QQ.NumberAnimation {
+                                                    duration: 160
+                                                }
+                                            }
+                                        }
+
+                                        QQ.MouseArea {
+                                            id: transferMenuMouse
+
+                                            anchors.fill: parent
+                                            enabled: !transferProcess.running
+                                            hoverEnabled: true
+                                            cursorShape:
+                                                enabled
+                                                    ? Qt.PointingHandCursor
+                                                    : Qt.ArrowCursor
+
+                                            onClicked: {
+                                                const point =
+                                                    transferSplitButton.mapToItem(
+                                                        themeLayer,
+                                                        0,
+                                                        transferSplitButton.height + 8
+                                                    )
+
+                                                transferMenu.x =
+                                                    themeLayer.width - transferMenu.width - 20
+                                                transferMenu.y = point.y
+                                                transferMenu.open()
+                                            }
+
+                                            Controls.ToolTip.visible:
+                                                containsMouse &&
+                                                !transferMenu.visible
+
+                                            Controls.ToolTip.delay: 500
+
+                                            Controls.ToolTip.text:
+                                                "More import and export actions."
+                                        }
+
+                                        QQ.Behavior on color {
+                                            QQ.ColorAnimation {
+                                                duration: 120
+                                            }
+                                        }
+
+                                        Controls.Popup {
+                                            id: transferMenu
+
+                                            parent: themeLayer
+                                            x:
+                                                themeLayer.width - width - 20
+                                            y:
+                                                transferSplitButton.mapToItem(
+                                                    themeLayer,
+                                                    0,
+                                                    transferSplitButton.height + 8
+                                                ).y
+
+                                            width: 350
+                                            height: 210
+                                            padding: 0
+                                            popupType: Controls.Popup.Item
+                                            closePolicy:
+                                                Controls.Popup.CloseOnEscape |
+                                                Controls.Popup.CloseOnPressOutside
+
+                                            background: QQ.Rectangle {
+                                                radius: 16
+                                                color:
+                                                    root.surfaceContainerLow
+                                                border.width: 1
+                                                border.color:
+                                                    root.outlineVariant
+                                            }
+
+                                            Controls.MenuItem {
+                                                id: importZipMenuItem
+
+                                                text: "Import (ZIP)"
+                                                x: 6
+                                                y: 6
+                                                width: transferMenu.width - 12
+                                                height: 66
+                                                leftPadding: 12
+                                                rightPadding: 12
+                                                hoverEnabled: true
+
+                                                background: QQ.Rectangle {
+                                                    radius: 11
+                                                    color:
+                                                        importZipMenuItem.highlighted || importZipMenuItem.hovered
+                                                            ? root.primaryContainer
+                                                            : "transparent"
+                                                }
+
+                                                contentItem: Layouts.RowLayout {
+                                                    spacing: 11
+
+                                                    Controls.Label {
+                                                        text: "folder_zip"
+                                                        color:
+                                                            importZipMenuItem.highlighted || importZipMenuItem.hovered
+                                                                ? root.textPrimaryContainer
+                                                                : root.textSurfaceVariant
+                                                        font.family:
+                                                            "Material Symbols Rounded"
+                                                        font.pixelSize: 19
+                                                    }
+
+                                                    Layouts.ColumnLayout {
+                                                        Layouts.Layout.fillWidth: true
+                                                        spacing: 2
+
+                                                        Controls.Label {
+                                                            Layouts.Layout.fillWidth: true
+                                                            text: importZipMenuItem.text
+                                                            color:
+                                                                importZipMenuItem.highlighted || importZipMenuItem.hovered
+                                                                    ? root.textPrimaryContainer
+                                                                    : root.textSurface
+                                                            font.pixelSize: 13
+                                                            font.weight: 600
+                                                        }
+
+                                                        Controls.Label {
+                                                            Layouts.Layout.fillWidth: true
+                                                            text:
+                                                                "Import config, images, and videos from a ZIP bundle."
+                                                            color:
+                                                                importZipMenuItem.highlighted || importZipMenuItem.hovered
+                                                                    ? Qt.alpha(root.textPrimaryContainer, 0.78)
+                                                                    : root.textSurfaceVariant
+                                                            font.pixelSize: 11
+                                                            elide: QQ.Text.ElideRight
+                                                        }
+                                                    }
+                                                }
+
+                                                onClicked: {
+                                                    transferMenu.close()
+                                                    importZipDialog.open()
+                                                }
+
+                                            }
+
+                                            Controls.MenuItem {
+                                                id: exportJsonMenuItem
+
+                                                text: "Export (JSON)"
+                                                x: 6
+                                                y: 72
+                                                width: transferMenu.width - 12
+                                                height: 66
+                                                leftPadding: 12
+                                                rightPadding: 12
+                                                hoverEnabled: true
+
+                                                background: QQ.Rectangle {
+                                                    radius: 11
+                                                    color:
+                                                        exportJsonMenuItem.highlighted || exportJsonMenuItem.hovered
+                                                            ? root.primaryContainer
+                                                            : "transparent"
+                                                }
+
+                                                contentItem: Layouts.RowLayout {
+                                                    spacing: 11
+
+                                                    Controls.Label {
+                                                        text: "data_object"
+                                                        color:
+                                                            exportJsonMenuItem.highlighted || exportJsonMenuItem.hovered
+                                                                ? root.textPrimaryContainer
+                                                                : root.textSurfaceVariant
+                                                        font.family:
+                                                            "Material Symbols Rounded"
+                                                        font.pixelSize: 19
+                                                    }
+
+                                                    Layouts.ColumnLayout {
+                                                        Layouts.Layout.fillWidth: true
+                                                        spacing: 2
+
+                                                        Controls.Label {
+                                                            Layouts.Layout.fillWidth: true
+                                                            text: exportJsonMenuItem.text
+                                                            color:
+                                                                exportJsonMenuItem.highlighted || exportJsonMenuItem.hovered
+                                                                    ? root.textPrimaryContainer
+                                                                    : root.textSurface
+                                                            font.pixelSize: 13
+                                                            font.weight: 600
+                                                        }
+
+                                                        Controls.Label {
+                                                            Layouts.Layout.fillWidth: true
+                                                            text: "Export only the config."
+                                                            color:
+                                                                exportJsonMenuItem.highlighted || exportJsonMenuItem.hovered
+                                                                    ? Qt.alpha(root.textPrimaryContainer, 0.78)
+                                                                    : root.textSurfaceVariant
+                                                            font.pixelSize: 11
+                                                            elide: QQ.Text.ElideRight
+                                                        }
+                                                    }
+                                                }
+
+                                                onClicked: {
+                                                    transferMenu.close()
+                                                    root.openExportJsonDialog()
+                                                }
+
+                                            }
+
+                                            Controls.MenuItem {
+                                                id: exportZipMenuItem
+
+                                                text: "Export (ZIP)"
+                                                x: 6
+                                                y: 138
+                                                width: transferMenu.width - 12
+                                                height: 66
+                                                leftPadding: 12
+                                                rightPadding: 12
+                                                hoverEnabled: true
+
+                                                background: QQ.Rectangle {
+                                                    radius: 11
+                                                    color:
+                                                        exportZipMenuItem.highlighted || exportZipMenuItem.hovered
+                                                            ? root.primaryContainer
+                                                            : "transparent"
+                                                }
+
+                                                contentItem: Layouts.RowLayout {
+                                                    spacing: 11
+
+                                                    Controls.Label {
+                                                        text: "archive"
+                                                        color:
+                                                            exportZipMenuItem.highlighted || exportZipMenuItem.hovered
+                                                                ? root.textPrimaryContainer
+                                                                : root.textSurfaceVariant
+                                                        font.family:
+                                                            "Material Symbols Rounded"
+                                                        font.pixelSize: 19
+                                                    }
+
+                                                    Layouts.ColumnLayout {
+                                                        Layouts.Layout.fillWidth: true
+                                                        spacing: 2
+
+                                                        Controls.Label {
+                                                            Layouts.Layout.fillWidth: true
+                                                            text: exportZipMenuItem.text
+                                                            color:
+                                                                exportZipMenuItem.highlighted || exportZipMenuItem.hovered
+                                                                    ? root.textPrimaryContainer
+                                                                    : root.textSurface
+                                                            font.pixelSize: 13
+                                                            font.weight: 600
+                                                        }
+
+                                                        Controls.Label {
+                                                            Layouts.Layout.fillWidth: true
+                                                            text:
+                                                                "Export config with all media assets in use."
+                                                            color:
+                                                                exportZipMenuItem.highlighted || exportZipMenuItem.hovered
+                                                                    ? Qt.alpha(root.textPrimaryContainer, 0.78)
+                                                                    : root.textSurfaceVariant
+                                                            font.pixelSize: 11
+                                                            elide: QQ.Text.ElideRight
+                                                        }
+                                                    }
+                                                }
+
+                                                onClicked: {
+                                                    transferMenu.close()
+                                                    exportZipDialog.open()
+                                                }
+
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
                             Controls.Label {
                                 text:
@@ -1096,8 +1637,22 @@ ShellRoot {
                             }
 
                             QQ.Flow {
+                                id: workspaceFlow
+
                                 Layouts.Layout.fillWidth: true
                                 spacing: 14
+
+                                readonly property int columnCount:
+                                    Math.max(
+                                        1,
+                                        Math.floor(
+                                            (width + spacing) / (160 + spacing)
+                                        )
+                                    )
+
+                                readonly property real cardWidth:
+                                    (width - (columnCount - 1) * spacing)
+                                    / columnCount
 
                                 QQ.Repeater {
                                     model:
@@ -1116,7 +1671,7 @@ ShellRoot {
                                                 workspace
                                             )
 
-                                        width: 160
+                                        width: workspaceFlow.cardWidth
                                         height: 138
 
                                         Layouts.ColumnLayout {
@@ -1551,7 +2106,13 @@ ShellRoot {
                                                 !root.editingExistingWorkspace
 
                                             Layouts.Layout.preferredWidth:
-                                                180
+                                                194
+
+                                            Layouts.Layout.preferredHeight:
+                                                42
+
+                                            leftPadding: 14
+                                            rightPadding: 42
 
                                             model:
                                                 root.pickerWorkspaceOptions()
@@ -1575,17 +2136,193 @@ ShellRoot {
                                                     : 0
                                             }
 
-                                            palette.button:
-                                                root.surfaceContainerHigh
+                                            contentItem: Layouts.RowLayout {
+                                                spacing: 9
 
-                                            palette.buttonText:
-                                                root.textSurface
+                                                Controls.Label {
+                                                    text: "grid_view"
+                                                    color:
+                                                        workspaceCombo.currentIndex > 0
+                                                            ? root.primary
+                                                            : root.textSurfaceVariant
+                                                    font.family:
+                                                        "Material Symbols Rounded"
+                                                    font.pixelSize: 18
+                                                }
 
-                                            palette.highlight:
-                                                root.primaryContainer
+                                                Controls.Label {
+                                                    Layouts.Layout.fillWidth: true
 
-                                            palette.highlightedText:
-                                                root.textPrimaryContainer
+                                                    text:
+                                                        workspaceCombo.currentIndex > 0
+                                                            ? "Workspace " + workspaceCombo.displayText
+                                                            : workspaceCombo.displayText
+                                                    color:
+                                                        workspaceCombo.currentIndex > 0
+                                                            ? root.textSurface
+                                                            : root.textSurfaceVariant
+                                                    font.pixelSize: 13
+                                                    font.weight:
+                                                        workspaceCombo.currentIndex > 0
+                                                            ? 600
+                                                            : 400
+                                                    elide: QQ.Text.ElideRight
+                                                    verticalAlignment:
+                                                        QQ.Text.AlignVCenter
+                                                }
+                                            }
+
+                                            indicator: Controls.Label {
+                                                x:
+                                                    workspaceCombo.width - width - 13
+                                                y:
+                                                    workspaceCombo.topPadding +
+                                                    (workspaceCombo.availableHeight - height) / 2
+
+                                                text: "expand_more"
+                                                color: root.textSurfaceVariant
+                                                font.family:
+                                                    "Material Symbols Rounded"
+                                                font.pixelSize: 21
+                                                rotation:
+                                                    workspaceCombo.popup.visible
+                                                        ? 180
+                                                        : 0
+
+                                                QQ.Behavior on rotation {
+                                                    QQ.NumberAnimation {
+                                                        duration: 160
+                                                    }
+                                                }
+                                            }
+
+                                            background: QQ.Rectangle {
+                                                radius: 21
+                                                color:
+                                                    workspaceCombo.pressed
+                                                        ? root.surfaceContainerHighest
+                                                        : workspaceCombo.hovered || workspaceCombo.popup.visible
+                                                            ? root.surfaceContainerHigh
+                                                            : root.surfaceContainerLow
+                                                border.width:
+                                                    workspaceCombo.popup.visible
+                                                        ? 2
+                                                        : 1
+                                                border.color:
+                                                    workspaceCombo.popup.visible
+                                                        ? root.primary
+                                                        : workspaceCombo.hovered
+                                                            ? root.outline
+                                                            : root.outlineVariant
+
+                                                QQ.Behavior on color {
+                                                    QQ.ColorAnimation {
+                                                        duration: 120
+                                                    }
+                                                }
+
+                                                QQ.Behavior on border.color {
+                                                    QQ.ColorAnimation {
+                                                        duration: 120
+                                                    }
+                                                }
+                                            }
+
+                                            delegate: Controls.ItemDelegate {
+                                                id: workspaceOption
+
+                                                required property var modelData
+                                                required property int index
+
+                                                width:
+                                                    workspaceCombo.popup.width - 12
+                                                height: 42
+                                                leftPadding: 11
+                                                rightPadding: 11
+
+                                                highlighted:
+                                                    workspaceCombo.highlightedIndex === index
+
+                                                background: QQ.Rectangle {
+                                                    radius: 11
+                                                    color:
+                                                        workspaceOption.highlighted
+                                                            ? root.primaryContainer
+                                                            : "transparent"
+                                                }
+
+                                                contentItem: Layouts.RowLayout {
+                                                    spacing: 9
+
+                                                    Controls.Label {
+                                                        text:
+                                                            workspaceOption.index === workspaceCombo.currentIndex
+                                                                ? "check"
+                                                                : workspaceOption.index === 0
+                                                                    ? "select_check_box"
+                                                                    : "grid_view"
+                                                        color:
+                                                            workspaceOption.highlighted
+                                                                ? root.textPrimaryContainer
+                                                                : workspaceOption.index === workspaceCombo.currentIndex
+                                                                    ? root.primary
+                                                                    : root.textSurfaceVariant
+                                                        font.family:
+                                                            "Material Symbols Rounded"
+                                                        font.pixelSize: 18
+                                                    }
+
+                                                    Controls.Label {
+                                                        Layouts.Layout.fillWidth: true
+
+                                                        text:
+                                                            workspaceOption.index > 0
+                                                                ? "Workspace " + workspaceOption.modelData
+                                                                : workspaceOption.modelData
+                                                        color:
+                                                            workspaceOption.highlighted
+                                                                ? root.textPrimaryContainer
+                                                                : root.textSurface
+                                                        font.pixelSize: 13
+                                                    }
+                                                }
+                                            }
+
+                                            popup: Controls.Popup {
+                                                y: workspaceCombo.height + 8
+                                                width: workspaceCombo.width
+                                                padding: 6
+
+                                                implicitHeight:
+                                                    Math.min(
+                                                        contentItem.implicitHeight + 12,
+                                                        280
+                                                    )
+
+                                                contentItem: QQ.ListView {
+                                                    clip: true
+                                                    implicitHeight: contentHeight
+                                                    model:
+                                                        workspaceCombo.popup.visible
+                                                            ? workspaceCombo.delegateModel
+                                                            : null
+                                                    currentIndex:
+                                                        workspaceCombo.highlightedIndex
+                                                    highlightMoveDuration: 0
+
+                                                    Controls.ScrollIndicator.vertical:
+                                                        Controls.ScrollIndicator {}
+                                                }
+
+                                                background: QQ.Rectangle {
+                                                    radius: 16
+                                                    color:
+                                                        root.surfaceContainerLow
+                                                    border.width: 1
+                                                    border.color:
+                                                        root.outlineVariant
+                                                }
+                                            }
 
                                             onActivated: {
                                                 root.resetVideoEditor()

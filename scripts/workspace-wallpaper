@@ -118,10 +118,9 @@ stop_video_for_output() {
     kill -KILL "$pid" 2>/dev/null || true
 }
 
-scheme_hash() {
+scheme_stamp() {
     if [[ -f "$SCHEME_FILE" ]]; then
-        sha256sum "$SCHEME_FILE" 2>/dev/null |
-            awk '{print $1}'
+        stat -c '%y:%s' "$SCHEME_FILE" 2>/dev/null
     fi
 }
 
@@ -133,7 +132,7 @@ wait_for_scheme_change() {
     for attempt in {1..12}; do
         is_current_workspace || return 1
 
-        current="$(scheme_hash)"
+        current="$(scheme_stamp)"
 
         if [[ -n "$current" && "$current" != "$before" ]]; then
             return 0
@@ -170,7 +169,7 @@ case "$TYPE" in
         [[ -f "$REFERENCE" ]] || exit 0
         is_current_workspace || exit 0
 
-        BEFORE_SCHEME="$(scheme_hash)"
+        BEFORE_SCHEME="$(scheme_stamp)"
 
         # Caelestia sees the selected still long enough to update its
         # adaptive palette. mpvpaper is started only after that handoff.

@@ -20,85 +20,101 @@ mkdir -p "$VIDEO_STATE_DIR"
 
 printf '%s\n' "$WORKSPACE" > "$STATE"
 
-[[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+is_current_workspace() {
+    local current=""
+    IFS= read -r current < "$STATE" 2>/dev/null || return 1
+    [[ "$current" == "$WORKSPACE" ]]
+}
 
-ENTRY="$(
-    jq -c \
+is_current_workspace || exit 0
+
+mapfile -t ENTRY_FIELDS < <(
+    jq -r \
         --arg ws "$WORKSPACE" \
-        'if (.workspaces[$ws] // null) != null
-         then .workspaces[$ws]
-         else .default
-         end' \
+        --arg random "$RANDOM_VALUE" \
+        '(.workspaces[$ws] // .default) as $entry |
+         if $entry == null or $entry == ""
+         then empty
+         elif ($entry | type) == "object"
+         then [
+             ($entry.type // "image"),
+             ($entry.path // ""),
+             (($entry.themeFrame // 0) | tostring)
+         ]
+         elif $entry == $random
+         then ["random", "", "0"]
+         else ["image", $entry, "0"]
+         end |
+         .[]' \
         "$CONFIG"
-)"
+)
 
-[[ -n "$ENTRY" && "$ENTRY" != "null" && "$ENTRY" != '""' ]] || exit 0
+TYPE="${ENTRY_FIELDS[0]:-}"
+WALLPAPER="${ENTRY_FIELDS[1]:-}"
+FRAME="${ENTRY_FIELDS[2]:-0}"
+
+[[ -n "$TYPE" ]] || exit 0
 
 workspace_output() {
-    local output
-
-    output="$(
-        hyprctl monitors -j 2>/dev/null |
-            jq -r \
-                --argjson ws "$WORKSPACE" \
-                '.[] |
-                 select(.activeWorkspace.id == $ws) |
-                 .name' |
-            head -n 1
-    )"
-
-    if [[ -z "$output" ]]; then
-        output="$(
-            hyprctl monitors -j 2>/dev/null |
-                jq -r \
-                    '.[] |
-                     select(.focused == true) |
-                     .name' |
-                head -n 1
-        )"
-    fi
-
-    printf '%s' "$output"
+    hyprctl monitors -j 2>/dev/null |
+        jq -r \
+            --argjson ws "$WORKSPACE" \
+            '([.[] |
+               select(.activeWorkspace.id == $ws) |
+               .name][0]) //
+             ([.[] |
+               select(.focused == true) |
+               .name][0]) //
+             empty'
 }
 
 safe_output_name() {
-    printf '%s' "$1" | tr -c '[:alnum:]_.-' '_'
+    local value="$1"
+    value="${value//[![:alnum:]_.-]/_}"
+    printf '%s' "$value"
 }
 
 stop_video_for_output() {
     local output="$1"
     local safe
     local pidfile
-    local pid
+    local pid=""
     local attempt
-    local args
+    local targeted=0
+    local arg
+    local -a argv=()
 
     safe="$(safe_output_name "$output")"
     pidfile="$VIDEO_STATE_DIR/$safe.pid"
 
     [[ -f "$pidfile" ]] || return 0
 
-    pid="$(cat "$pidfile" 2>/dev/null || true)"
+    IFS= read -r pid < "$pidfile" 2>/dev/null || true
     rm -f "$pidfile"
 
     [[ "$pid" =~ ^[0-9]+$ ]] || return 0
     [[ -r "/proc/$pid/cmdline" ]] || return 0
 
-    args="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+    mapfile -d '' -t argv < "/proc/$pid/cmdline" 2>/dev/null || return 0
 
-    # Never kill an unrelated process if a stale PID has been reused.
-    [[ "$args" == *"mpvpaper"* ]] || return 0
-    [[ "$args" == *" $output "* ]] || return 0
+    [[ "${argv[0]##*/}" == "mpvpaper" ]] || return 0
+
+    for arg in "${argv[@]}"; do
+        if [[ "$arg" == "$output" ]]; then
+            targeted=1
+            break
+        fi
+    done
+
+    ((targeted == 1)) || return 0
 
     kill -TERM "$pid" 2>/dev/null || return 0
 
-    # Only pay a shutdown wait when a video is actually active.
     for attempt in {1..4}; do
         kill -0 "$pid" 2>/dev/null || return 0
         sleep 0.025
     done
 
-    # Wallpaper process did not release quickly enough.
     kill -KILL "$pid" 2>/dev/null || true
 }
 
@@ -115,7 +131,7 @@ wait_for_scheme_change() {
     local attempt
 
     for attempt in {1..12}; do
-        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || return 1
+        is_current_workspace || return 1
 
         current="$(scheme_hash)"
 
@@ -126,7 +142,6 @@ wait_for_scheme_change() {
         sleep 0.05
     done
 
-    # A reference frame can legitimately produce an identical scheme.
     return 0
 }
 
@@ -136,27 +151,11 @@ OUTPUT="$(workspace_output)"
 exec 9>"$LOCK"
 flock 9
 
-[[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
-
-TYPE="$(
-    jq -r \
-        'if type == "object"
-         then (.type // "image")
-         elif type == "string" and . == "'"$RANDOM_VALUE"'"
-         then "random"
-         else "image"
-         end' \
-        <<<"$ENTRY"
-)"
+is_current_workspace || exit 0
 
 case "$TYPE" in
     video)
-        VIDEO="$(
-            jq -r '.path // empty' <<<"$ENTRY"
-        )"
-        FRAME="$(
-            jq -r '.themeFrame // 0' <<<"$ENTRY"
-        )"
+        VIDEO="$WALLPAPER"
 
         [[ -f "$VIDEO" ]] || exit 0
         [[ -x "$MEDIA_HELPER" ]] || exit 0
@@ -169,7 +168,7 @@ case "$TYPE" in
         )"
 
         [[ -f "$REFERENCE" ]] || exit 0
-        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+        is_current_workspace || exit 0
 
         BEFORE_SCHEME="$(scheme_hash)"
 
@@ -179,7 +178,7 @@ case "$TYPE" in
 
         wait_for_scheme_change "$BEFORE_SCHEME" || exit 0
 
-        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+        is_current_workspace || exit 0
 
         SAFE_OUTPUT="$(safe_output_name "$OUTPUT")"
         PIDFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.pid"
@@ -216,25 +215,16 @@ case "$TYPE" in
         RANDOM_INDEX=$((RANDOM % ${#WALLPAPERS[@]}))
         WALLPAPER="${WALLPAPERS[$RANDOM_INDEX]}"
 
-        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+        is_current_workspace || exit 0
         caelestia wallpaper -f "$WALLPAPER"
         ;;
 
     *)
-        WALLPAPER="$(
-            jq -r \
-                'if type == "string"
-                 then .
-                 else (.path // empty)
-                 end' \
-                <<<"$ENTRY"
-        )"
-
         [[ -f "$WALLPAPER" ]] || exit 0
 
         stop_video_for_output "$OUTPUT"
 
-        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+        is_current_workspace || exit 0
         caelestia wallpaper -f "$WALLPAPER"
         ;;
 esac

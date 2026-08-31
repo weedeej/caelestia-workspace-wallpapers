@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Workspace Wallpapers
+Comment=Per-workspace wallpaper manager for Caelestia and Hyprland
+Exec=qs -c workspace-wallpapers
+Icon=preferences-desktop-wallpaper
+Terminal=false
+Categories=Settings;Utility;
+StartupNotify=false

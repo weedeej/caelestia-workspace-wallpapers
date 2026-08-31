@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CONFIG="$HOME/.config/caelestia/workspace-wallpapers.json"
+RANDOM_VALUE="__CAELESTIA_RANDOM__"
+
+usage() {
+    echo "usage:"
+    echo "  $0 set-default /absolute/path"
+    echo "  $0 set WORKSPACE /absolute/path|$RANDOM_VALUE"
+    echo "  $0 clear WORKSPACE"
+    exit 1
+}
+
+[[ -f "$CONFIG" ]] || {
+    mkdir -p "$(dirname "$CONFIG")"
+    printf '{\n  "default": "",\n  "workspaces": {}\n}\n' > "$CONFIG"
+}
+
+command="${1:-}"
+
+case "$command" in
+    set-default)
+        path="${2:-}"
+
+        [[ -f "$path" ]] || {
+            echo "Wallpaper does not exist: $path" >&2
+            exit 1
+        }
+
+        tmp="$(mktemp)"
+        jq --arg path "$path" '.default = $path' "$CONFIG" > "$tmp"
+        mv "$tmp" "$CONFIG"
+        ;;
+
+    set)
+        workspace="${2:-}"
+        path="${3:-}"
+
+        [[ -n "$workspace" && -n "$path" ]] || usage
+
+        if [[ "$path" != "$RANDOM_VALUE" && ! -f "$path" ]]; then
+            echo "Wallpaper does not exist: $path" >&2
+            exit 1
+        fi
+
+        tmp="$(mktemp)"
+        jq \
+            --arg ws "$workspace" \
+            --arg path "$path" \
+            '.workspaces[$ws] = $path' \
+            "$CONFIG" > "$tmp"
+        mv "$tmp" "$CONFIG"
+        ;;
+
+    clear)
+        workspace="${2:-}"
+        [[ -n "$workspace" ]] || usage
+
+        tmp="$(mktemp)"
+        jq \
+            --arg ws "$workspace" \
+            'del(.workspaces[$ws])' \
+            "$CONFIG" > "$tmp"
+        mv "$tmp" "$CONFIG"
+        ;;
+
+    *)
+        usage
+        ;;
+esac

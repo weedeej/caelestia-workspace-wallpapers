@@ -28,20 +28,6 @@ def run(command):
         text=True,
     )
 
-def video_duration(path):
-    result = run([
-        "ffprobe",
-        "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        str(path),
-    ])
-
-    try:
-        return max(0.0, float(result.stdout.strip()))
-    except ValueError:
-        return 0.0
-
 def cache_dir(path):
     resolved = path.resolve()
     stat = resolved.stat()
@@ -52,6 +38,33 @@ def cache_dir(path):
     directory = CACHE_ROOT / key
     directory.mkdir(parents=True, exist_ok=True)
     return directory
+
+def video_duration(path, directory=None):
+    directory = directory or cache_dir(path)
+    metadata = directory / "metadata.json"
+
+    if metadata.is_file():
+        try:
+            data = json.loads(metadata.read_text())
+            return max(0.0, float(data["duration"]))
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+
+    result = run([
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ])
+
+    try:
+        duration = max(0.0, float(result.stdout.strip()))
+    except ValueError:
+        duration = 0.0
+
+    metadata.write_text(json.dumps({"duration": duration}))
+    return duration
 
 def extract_scaled(path, seconds, output, width):
     if output.exists() and output.stat().st_size > 0:
@@ -135,7 +148,8 @@ def scan():
                 continue
 
             try:
-                duration = video_duration(path)
+                directory = cache_dir(path)
+                duration = video_duration(path, directory)
                 thumb = card_thumbnail(path, duration)
                 items.append({
                     "type": "video",
@@ -156,11 +170,12 @@ def timeline(video, interval):
         fail(f"Video does not exist: {path}")
 
     interval = max(1, int(interval))
-    duration = video_duration(path)
-    directory = cache_dir(path) / f"timeline-{interval}"
-    directory.mkdir(parents=True, exist_ok=True)
+    directory = cache_dir(path)
+    duration = video_duration(path, directory)
+    timeline_dir = directory / f"timeline-{interval}"
+    timeline_dir.mkdir(parents=True, exist_ok=True)
 
-    frames = sorted(directory.glob("thumb-*.jpg"))
+    frames = sorted(timeline_dir.glob("thumb-*.jpg"))
 
     if not frames:
         run([
@@ -171,9 +186,9 @@ def timeline(video, interval):
             "-vf", f"fps=1/{interval},scale=320:-2",
             "-q:v", "4",
             "-y",
-            str(directory / "thumb-%06d.jpg"),
+            str(timeline_dir / "thumb-%06d.jpg"),
         ])
-        frames = sorted(directory.glob("thumb-*.jpg"))
+        frames = sorted(timeline_dir.glob("thumb-*.jpg"))
 
     result = [
         {
@@ -196,13 +211,14 @@ def frame(video, seconds):
         fail(f"Video does not exist: {path}")
 
     seconds = max(0.0, float(seconds))
-    duration = video_duration(path)
+    directory = cache_dir(path)
+    duration = video_duration(path, directory)
 
     if duration > 0:
         seconds = min(seconds, max(0.0, duration - 0.001))
 
     millis = int(round(seconds * 1000))
-    output = cache_dir(path) / f"theme-{millis:010d}.jpg"
+    output = directory / f"theme-{millis:010d}.jpg"
     extract_theme_frame(path, seconds, output)
     print(str(output.resolve()))
 

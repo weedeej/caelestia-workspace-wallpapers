@@ -2,6 +2,12 @@
   "default": "/absolute/path/to/default-wallpaper.jpg",
   "workspaces": {
     "2": "/absolute/path/to/workspace-2.jpg",
+    "3": {
+      "type": "video",
+      "path": "/absolute/path/to/video.webm",
+      "themeFrame": 15.0,
+      "interval": 5
+    },
     "4": "__CAELESTIA_RANDOM__"
   }
 }

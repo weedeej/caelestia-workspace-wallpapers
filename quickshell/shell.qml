@@ -10,8 +10,6 @@ import Quickshell.Widgets
 ShellRoot {
     id: root
 
-    // Standalone utility: closing the final FloatingWindow should also
-    // terminate `qs -c workspace-wallpapers`.
     QQ.Connections {
         target: Quickshell
 
@@ -21,7 +19,8 @@ ShellRoot {
     }
 
     property string home: Quickshell.env("HOME")
-    property string wallpaperDir: home + "/Pictures/Wallpapers"
+    property string imageDir: home + "/Pictures/Wallpapers"
+    property string videoDir: home + "/Videos/Wallpapers"
 
     property string configPath:
         home + "/.config/caelestia/workspace-wallpapers.json"
@@ -35,6 +34,9 @@ ShellRoot {
     property string applyPath:
         home + "/.config/caelestia/scripts/workspace-wallpaper"
 
+    property string mediaHelperPath:
+        home + "/.config/caelestia/scripts/workspace-wallpaper-media"
+
     property var configData: ({
         "default": "",
         "workspaces": ({})
@@ -47,7 +49,7 @@ ShellRoot {
     property var pendingSchemeData: null
     property bool schemeReady: false
 
-    property var wallpapers: []
+    property var mediaItems: []
 
     readonly property string randomWallpaperValue:
         "__CAELESTIA_RANDOM__"
@@ -55,12 +57,21 @@ ShellRoot {
     property bool pickerOpen: false
     property bool pickingDefault: false
     property int selectedWorkspace: -1
+    property bool editingExistingWorkspace: false
 
-    // Keep the picker open until the config file confirms the requested value.
-    property string pendingWallpaperSelection: ""
+    property var pendingSelectionValue: null
     property int pendingSelectionWorkspace: -1
     property bool pendingSelectionDefault: false
     property string configWriteError: ""
+    property string mediaError: ""
+
+    property bool videoEditorOpen: false
+    property string selectedVideoPath: ""
+    property real selectedVideoDuration: 0
+    property real selectedVideoFrame: 0
+    property int selectedVideoInterval: 5
+    property var timelineFrames: []
+    property bool timelineLoading: false
 
     function colour(name, fallback) {
         if (
@@ -69,16 +80,10 @@ ShellRoot {
             schemeData.colours[name] !== undefined &&
             schemeData.colours[name] !== null
         ) {
-            const value = String(
-                schemeData.colours[name]
-            )
+            const value = String(schemeData.colours[name])
 
-            if (value.length > 0) {
-                if (value.startsWith("#"))
-                    return value
-
-                return "#" + value
-            }
+            if (value.length > 0)
+                return value.startsWith("#") ? value : "#" + value
         }
 
         return fallback
@@ -86,106 +91,188 @@ ShellRoot {
 
     readonly property var surface:
         colour("surface", "#18181d")
-
     readonly property var surfaceContainer:
         colour("surfaceContainer", "#202026")
-
     readonly property var surfaceContainerLow:
         colour("surfaceContainerLow", "#1d1d22")
-
     readonly property var surfaceContainerHigh:
         colour("surfaceContainerHigh", "#292930")
-
     readonly property var surfaceContainerHighest:
         colour("surfaceContainerHighest", "#33333b")
-
     readonly property var textSurface:
         colour("onSurface", "#f1f1f4")
-
     readonly property var textSurfaceVariant:
         colour("onSurfaceVariant", "#b9b9c1")
-
     readonly property var outline:
         colour("outline", "#8e8e99")
-
     readonly property var outlineVariant:
         colour("outlineVariant", "#3d3d46")
-
     readonly property var primary:
         colour("primary", "#c9bfff")
-
-    readonly property var textPrimary:
-        colour("onPrimary", "#30275f")
-
     readonly property var primaryContainer:
         colour("primaryContainer", "#48406f")
-
     readonly property var textPrimaryContainer:
         colour("onPrimaryContainer", "#e7deff")
 
-    readonly property var secondaryContainer:
-        colour("secondaryContainer", "#464551")
-
-    readonly property var textSecondaryContainer:
-        colour("onSecondaryContainer", "#e3e1ef")
-
     function fileUrl(path) {
-        return path
-            ? "file://" + encodeURI(path)
-            : ""
+        return path ? "file://" + encodeURI(path) : ""
     }
 
     function basename(path) {
         if (!path)
             return ""
 
-        const parts = path.split("/")
+        const parts = String(path).split("/")
         return parts[parts.length - 1]
     }
 
-    function isRandomWallpaper(path) {
-        return path === randomWallpaperValue
+    function formatTime(seconds) {
+        const total = Math.max(0, Math.floor(Number(seconds) || 0))
+        const hours = Math.floor(total / 3600)
+        const minutes = Math.floor((total % 3600) / 60)
+        const secs = total % 60
+
+        if (hours > 0) {
+            return (
+                hours.toString().padStart(2, "0") + ":" +
+                minutes.toString().padStart(2, "0") + ":" +
+                secs.toString().padStart(2, "0")
+            )
+        }
+
+        return (
+            minutes.toString().padStart(2, "0") + ":" +
+            secs.toString().padStart(2, "0")
+        )
     }
 
-    function displayWallpaperName(path) {
-        if (isRandomWallpaper(path))
+    function entryType(entry) {
+        if (entry === undefined || entry === null || entry === "")
+            return "none"
+
+        if (typeof entry === "string")
+            return entry === randomWallpaperValue ? "random" : "image"
+
+        if (typeof entry === "object" && entry.type)
+            return String(entry.type)
+
+        return "none"
+    }
+
+    function entryPath(entry) {
+        if (typeof entry === "string")
+            return entry === randomWallpaperValue ? "" : entry
+
+        if (entry && typeof entry === "object" && entry.path)
+            return String(entry.path)
+
+        return ""
+    }
+
+    function entryThemeFrame(entry) {
+        if (
+            entry &&
+            typeof entry === "object" &&
+            entry.themeFrame !== undefined
+        )
+            return Number(entry.themeFrame) || 0
+
+        return 0
+    }
+
+    function entryInterval(entry) {
+        if (
+            entry &&
+            typeof entry === "object" &&
+            entry.interval !== undefined
+        )
+            return Math.max(1, Number(entry.interval) || 5)
+
+        return 5
+    }
+
+    function isVideoEntry(entry) {
+        return entryType(entry) === "video"
+    }
+
+    function isRandomEntry(entry) {
+        return entryType(entry) === "random"
+    }
+
+    function mediaForPath(path) {
+        for (let index = 0; index < mediaItems.length; index++) {
+            if (mediaItems[index].path === path)
+                return mediaItems[index]
+        }
+
+        return null
+    }
+
+    function entryPreview(entry) {
+        const type = entryType(entry)
+
+        if (type === "image")
+            return entryPath(entry)
+
+        if (type === "video") {
+            const media = mediaForPath(entryPath(entry))
+            return media && media.thumbnail ? media.thumbnail : ""
+        }
+
+        return ""
+    }
+
+    function entryName(entry) {
+        const type = entryType(entry)
+
+        if (type === "random")
             return "Random wallpaper"
 
+        const path = entryPath(entry)
         return basename(path)
     }
 
     function pickerItems() {
         if (pickingDefault)
-            return wallpapers
+            return mediaItems
 
-        return [randomWallpaperValue].concat(wallpapers)
+        return [{
+            "type": "random",
+            "path": "",
+            "thumbnail": "",
+            "duration": 0
+        }].concat(mediaItems)
     }
 
     function workspaceHasOverride(workspace) {
-        if (!configData.workspaces)
-            return false
-
-        return configData.workspaces[
-            workspace.toString()
-        ] !== undefined
+        return (
+            configData.workspaces &&
+            configData.workspaces[workspace.toString()] !== undefined
+        )
     }
 
-    function workspaceWallpaper(workspace) {
+    function workspaceEntry(workspace) {
         if (!configData.workspaces)
             return ""
 
-        return configData.workspaces[
-            workspace.toString()
-        ] || ""
+        return configData.workspaces[workspace.toString()] || ""
+    }
+
+    function targetEntry() {
+        if (pickingDefault)
+            return configData.default
+
+        if (selectedWorkspace > 0)
+            return workspaceEntry(selectedWorkspace)
+
+        return ""
     }
 
     function overrideWorkspaceIds() {
         if (!configData.workspaces)
             return []
 
-        return Object.keys(
-            configData.workspaces
-        )
+        return Object.keys(configData.workspaces)
             .map(value => Number(value))
             .filter(value => value > 0)
             .sort((a, b) => a - b)
@@ -202,9 +289,7 @@ ShellRoot {
         if (!Hyprland.focusedWorkspace)
             return false
 
-        return workspaceHasOverride(
-            Hyprland.focusedWorkspace.id
-        )
+        return workspaceHasOverride(Hyprland.focusedWorkspace.id)
     }
 
     function pickerWorkspaceOptions() {
@@ -214,12 +299,16 @@ ShellRoot {
             if (
                 !workspaceHasOverride(workspace) ||
                 workspace === selectedWorkspace
-            ) {
+            )
                 options.push(String(workspace))
-            }
         }
 
         return options
+    }
+
+    function rescanMedia() {
+        if (!mediaScanner.running)
+            mediaScanner.exec([mediaHelperPath, "scan"])
     }
 
     function scrollPickerIntoView() {
@@ -233,79 +322,123 @@ ShellRoot {
             )
                 return
 
-            const targetY = Math.max(
-                0,
-                pickerPanel.y - 12
-            )
+            const targetY = Math.max(0, pickerPanel.y - 12)
+            const maxY = Math.max(0, flick.contentHeight - flick.height)
 
-            const maxY = Math.max(
-                0,
-                flick.contentHeight - flick.height
-            )
-
-            flick.contentY = Math.min(
-                targetY,
-                maxY
-            )
+            flick.contentY = Math.min(targetY, maxY)
         })
+    }
+
+    function resetVideoEditor() {
+        videoEditorOpen = false
+        selectedVideoPath = ""
+        selectedVideoDuration = 0
+        selectedVideoFrame = 0
+        selectedVideoInterval = 5
+        timelineFrames = []
+        timelineLoading = false
+        mediaError = ""
     }
 
     function openDefaultPicker() {
         pickingDefault = true
         selectedWorkspace = -1
+        editingExistingWorkspace = false
         pickerOpen = true
+        resetVideoEditor()
+        rescanMedia()
         scrollPickerIntoView()
     }
 
     function beginAddWorkspace() {
         pickingDefault = false
         selectedWorkspace = -1
+        editingExistingWorkspace = false
         pickerOpen = true
+        resetVideoEditor()
+        rescanMedia()
         scrollPickerIntoView()
     }
 
     function editWorkspace(workspace) {
         selectedWorkspace = workspace
         pickingDefault = false
+        editingExistingWorkspace = true
         pickerOpen = true
+        resetVideoEditor()
+        rescanMedia()
         scrollPickerIntoView()
+    }
+
+    function clearPendingSelection() {
+        pendingSelectionValue = null
+        pendingSelectionWorkspace = -1
+        pendingSelectionDefault = false
     }
 
     function closePicker() {
         pickerOpen = false
         pickingDefault = false
         selectedWorkspace = -1
+        editingExistingWorkspace = false
         clearPendingSelection()
+        resetVideoEditor()
     }
 
-    function clearPendingSelection() {
-        pendingWallpaperSelection = ""
-        pendingSelectionWorkspace = -1
-        pendingSelectionDefault = false
+    function entryEquivalent(left, right) {
+        const leftType = entryType(left)
+        const rightType = entryType(right)
+
+        if (leftType !== rightType)
+            return false
+
+        if (leftType === "random")
+            return true
+
+        if (leftType === "image")
+            return entryPath(left) === entryPath(right)
+
+        if (leftType === "video") {
+            return (
+                entryPath(left) === entryPath(right) &&
+                Math.abs(
+                    entryThemeFrame(left) -
+                    entryThemeFrame(right)
+                ) < 0.01 &&
+                entryInterval(left) === entryInterval(right)
+            )
+        }
+
+        return false
     }
 
     function confirmPendingSelection() {
-        if (!pendingWallpaperSelection)
+        if (pendingSelectionValue === null)
             return
 
         let saved = false
 
         if (pendingSelectionDefault) {
-            saved =
-                configData.default === pendingWallpaperSelection
+            saved = entryEquivalent(
+                configData.default,
+                pendingSelectionValue
+            )
         } else if (
             pendingSelectionWorkspace > 0 &&
             configData.workspaces
         ) {
-            saved =
+            saved = entryEquivalent(
                 configData.workspaces[
                     pendingSelectionWorkspace.toString()
-                ] === pendingWallpaperSelection
+                ],
+                pendingSelectionValue
+            )
         }
 
         if (saved) {
             pickerOpen = false
             clearPendingSelection()
+            resetVideoEditor()
         }
     }
 
@@ -319,54 +452,161 @@ ShellRoot {
         ])
     }
 
-    function assignWallpaper(path) {
+    function preparePendingApply() {
+        if (pickingDefault) {
+            return (
+                Hyprland.focusedWorkspace &&
+                !currentWorkspaceHasOverride()
+            )
+                ? Hyprland.focusedWorkspace.id
+                : -1
+        }
+
+        return (
+            selectedWorkspace > 0 &&
+            isCurrentWorkspace(selectedWorkspace)
+        )
+            ? selectedWorkspace
+            : -1
+    }
+
+    function assignSimpleEntry(value) {
         if (configWriter.running)
             return
 
         configWriteError = ""
+        pendingSelectionValue = value
+        pendingSelectionDefault = pickingDefault
+        pendingSelectionWorkspace =
+            pickingDefault ? -1 : selectedWorkspace
+
+        configWriter.pendingApplyWorkspace =
+            preparePendingApply()
 
         if (pickingDefault) {
-            pendingWallpaperSelection = path
-            pendingSelectionDefault = true
-            pendingSelectionWorkspace = -1
-
-            configWriter.pendingApplyWorkspace =
-                Hyprland.focusedWorkspace &&
-                !currentWorkspaceHasOverride()
-                    ? Hyprland.focusedWorkspace.id
-                    : -1
-
             configWriter.exec([
                 helperPath,
                 "set-default",
-                path
+                value
             ])
         } else if (selectedWorkspace > 0) {
-            pendingWallpaperSelection = path
-            pendingSelectionDefault = false
-            pendingSelectionWorkspace = selectedWorkspace
-
-            configWriter.pendingApplyWorkspace =
-                isCurrentWorkspace(
-                    selectedWorkspace
-                )
-                    ? selectedWorkspace
-                    : -1
-
             configWriter.exec([
                 helperPath,
                 "set",
                 selectedWorkspace.toString(),
-                path
+                value
             ])
         }
     }
 
-    function clearWorkspace(workspace) {
+    function openVideoEditor(item) {
+        if (!pickingDefault && selectedWorkspace <= 0)
+            return
+
+        const current = targetEntry()
+
+        selectedVideoPath = item.path
+        selectedVideoDuration = Number(item.duration) || 0
+
         if (
-            workspace <= 0 ||
+            isVideoEntry(current) &&
+            entryPath(current) === item.path
+        ) {
+            selectedVideoFrame = entryThemeFrame(current)
+            selectedVideoInterval = entryInterval(current)
+        } else {
+            selectedVideoFrame = 0
+            selectedVideoInterval = 5
+        }
+
+        videoEditorOpen = true
+        loadTimeline()
+        scrollPickerIntoView()
+    }
+
+    function loadTimeline() {
+        if (!selectedVideoPath || timelineGenerator.running)
+            return
+
+        timelineLoading = true
+        timelineFrames = []
+        mediaError = ""
+
+        timelineGenerator.exec([
+            mediaHelperPath,
+            "timeline",
+            selectedVideoPath,
+            selectedVideoInterval.toString()
+        ])
+    }
+
+    function setTimelinePosition(x, width) {
+        if (selectedVideoDuration <= 0 || width <= 0)
+            return
+
+        const ratio = Math.max(0, Math.min(1, x / width))
+        selectedVideoFrame = ratio * selectedVideoDuration
+    }
+
+    function commitVideo() {
+        if (
+            !selectedVideoPath ||
+            (!pickingDefault && selectedWorkspace <= 0) ||
             configWriter.running
         )
+            return
+
+        const value = {
+            "type": "video",
+            "path": selectedVideoPath,
+            "themeFrame": Number(selectedVideoFrame.toFixed(3)),
+            "interval": selectedVideoInterval
+        }
+
+        configWriteError = ""
+        pendingSelectionValue = value
+        pendingSelectionDefault = pickingDefault
+        pendingSelectionWorkspace =
+            pickingDefault ? -1 : selectedWorkspace
+
+        configWriter.pendingApplyWorkspace =
+            preparePendingApply()
+
+        if (pickingDefault) {
+            configWriter.exec([
+                helperPath,
+                "set-video-default",
+                selectedVideoPath,
+                value.themeFrame.toString(),
+                value.interval.toString()
+            ])
+        } else {
+            configWriter.exec([
+                helperPath,
+                "set-video",
+                selectedWorkspace.toString(),
+                selectedVideoPath,
+                value.themeFrame.toString(),
+                value.interval.toString()
+            ])
+        }
+    }
+
+    function handlePickerItem(item) {
+        if (!pickingDefault && selectedWorkspace <= 0)
+            return
+
+        if (item.type === "random") {
+            assignSimpleEntry(randomWallpaperValue)
+        } else if (item.type === "video") {
+            openVideoEditor(item)
+        } else {
+            assignSimpleEntry(item.path)
+        }
+    }
+
+    function clearWorkspace(workspace) {
+        if (workspace <= 0 || configWriter.running)
             return
 
         configWriter.pendingApplyWorkspace =
@@ -395,9 +635,7 @@ ShellRoot {
                 const raw = text()
 
                 if (raw && raw.length > 0) {
-                    root.configData =
-                        JSON.parse(raw)
-
+                    root.configData = JSON.parse(raw)
                     root.confirmPendingSelection()
                 }
             } catch (error) {
@@ -466,9 +704,7 @@ ShellRoot {
                 pendingApplyWorkspace = -1
 
                 if (workspace > 0)
-                    root.applyWorkspace(
-                        workspace
-                    )
+                    root.applyWorkspace(workspace)
             }
         }
     }
@@ -478,29 +714,79 @@ ShellRoot {
     }
 
     Process {
-        id: wallpaperScanner
+        id: mediaScanner
 
         command: [
-            "bash",
-            "-lc",
-            "find \"" + root.wallpaperDir + "\" " +
-            "-maxdepth 1 -type f \\( " +
-            "-iname '*.jpg' -o " +
-            "-iname '*.jpeg' -o " +
-            "-iname '*.png' -o " +
-            "-iname '*.webp' " +
-            "\\) -print | sort"
+            root.mediaHelperPath,
+            "scan"
         ]
 
         running: true
 
+        stderr: StdioCollector {
+            onStreamFinished: {
+                const message = text.trim()
+
+                if (message.length > 0)
+                    console.warn("Media scan:", message)
+            }
+        }
+
         stdout: StdioCollector {
             onStreamFinished: {
-                root.wallpapers = text
-                    .split("\n")
-                    .filter(
-                        path => path.length > 0
+                try {
+                    const raw = text.trim()
+                    root.mediaItems =
+                        raw.length > 0
+                            ? JSON.parse(raw)
+                            : []
+                } catch (error) {
+                    console.warn(
+                        "Unable to parse media list:",
+                        error
                     )
+                }
+            }
+        }
+    }
+
+    Process {
+        id: timelineGenerator
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                const message = text.trim()
+
+                if (message.length > 0)
+                    root.mediaError = message
+            }
+        }
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const raw = text.trim()
+
+                    if (raw.length > 0) {
+                        const result = JSON.parse(raw)
+                        root.timelineFrames =
+                            result.frames || []
+                        root.selectedVideoDuration =
+                            Number(result.duration) || 0
+
+                        if (
+                            root.selectedVideoFrame >
+                            root.selectedVideoDuration
+                        )
+                            root.selectedVideoFrame =
+                                root.selectedVideoDuration
+                    }
+                } catch (error) {
+                    root.mediaError =
+                        "Unable to parse video timeline."
+                }
+
+                root.timelineLoading = false
             }
         }
     }
@@ -508,8 +794,6 @@ ShellRoot {
     QQ.SequentialAnimation {
         id: themeSwapAnimation
 
-        // Fade the complete utility down before swapping the palette so
-        // individual controls never visibly repaint in different schemes.
         QQ.NumberAnimation {
             target: themeLayer
             property: "opacity"
@@ -521,7 +805,8 @@ ShellRoot {
         QQ.ScriptAction {
             script: {
                 if (root.pendingSchemeData !== null) {
-                    root.schemeData = root.pendingSchemeData
+                    root.schemeData =
+                        root.pendingSchemeData
                     root.pendingSchemeData = null
                 }
             }
@@ -541,11 +826,11 @@ ShellRoot {
 
         title: "Workspace Wallpapers"
 
-        implicitWidth: 760
-        implicitHeight: 610
+        implicitWidth: 780
+        implicitHeight: 650
 
         minimumSize:
-            Qt.size(560, 460)
+            Qt.size(580, 480)
 
         QQ.Rectangle {
             id: themeLayer
@@ -557,7 +842,6 @@ ShellRoot {
                 anchors.fill: parent
                 spacing: 0
 
-                // Thin draggable strip only.
                 QQ.Rectangle {
                     Layouts.Layout.fillWidth: true
                     Layouts.Layout.preferredHeight: 12
@@ -567,12 +851,8 @@ ShellRoot {
 
                     QQ.MouseArea {
                         anchors.fill: parent
-
-                        acceptedButtons:
-                            Qt.LeftButton
-
-                        cursorShape:
-                            Qt.SizeAllCursor
+                        acceptedButtons: Qt.LeftButton
+                        cursorShape: Qt.SizeAllCursor
 
                         onPressed:
                             window.startSystemMove()
@@ -597,14 +877,9 @@ ShellRoot {
                         Layouts.ColumnLayout {
                             id: content
 
-                            anchors.left:
-                                parent.left
-
-                            anchors.right:
-                                parent.right
-
-                            anchors.top:
-                                parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
 
                             anchors.leftMargin: 20
                             anchors.rightMargin: 20
@@ -624,32 +899,89 @@ ShellRoot {
                             }
 
                             ClippingRectangle {
-                                Layouts.Layout.fillWidth:
-                                    true
+                                id: defaultPreview
 
-                                Layouts.Layout.preferredHeight:
-                                    180
+                                property var entry:
+                                    root.configData.default
+
+                                Layouts.Layout.fillWidth: true
+                                Layouts.Layout.preferredHeight: 180
 
                                 radius: 16
-
                                 color:
                                     root.surfaceContainerHigh
 
                                 QQ.Image {
                                     anchors.fill: parent
 
+                                    visible:
+                                        root.entryPreview(
+                                            defaultPreview.entry
+                                        ).length > 0
+
                                     source:
                                         root.fileUrl(
-                                            root.configData
-                                                .default
+                                            root.entryPreview(
+                                                defaultPreview.entry
+                                            )
                                         )
 
                                     fillMode:
-                                        QQ.Image
-                                            .PreserveAspectCrop
+                                        QQ.Image.PreserveAspectCrop
 
                                     asynchronous: true
                                     smooth: true
+                                }
+
+                                QQ.Rectangle {
+                                    anchors.centerIn: parent
+
+                                    visible:
+                                        root.isVideoEntry(
+                                            defaultPreview.entry
+                                        ) &&
+                                        root.entryPreview(
+                                            defaultPreview.entry
+                                        ).length === 0
+
+                                    width: 64
+                                    height: 64
+                                    radius: 32
+                                    color:
+                                        root.primaryContainer
+
+                                    Controls.Label {
+                                        anchors.centerIn: parent
+                                        text: "▶"
+                                        color:
+                                            root.textPrimaryContainer
+                                        font.pixelSize: 24
+                                    }
+                                }
+
+                                QQ.Rectangle {
+                                    anchors.top: parent.top
+                                    anchors.left: parent.left
+                                    anchors.margins: 10
+
+                                    visible:
+                                        root.isVideoEntry(
+                                            defaultPreview.entry
+                                        )
+
+                                    width: 56
+                                    height: 24
+                                    radius: 12
+                                    color:
+                                        Qt.rgba(0, 0, 0, 0.62)
+
+                                    Controls.Label {
+                                        anchors.centerIn: parent
+                                        text: "▶ VIDEO"
+                                        color: "white"
+                                        font.pixelSize: 9
+                                        font.bold: true
+                                    }
                                 }
 
                                 QQ.HoverHandler {
@@ -660,41 +992,46 @@ ShellRoot {
                                     anchors.fill: parent
                                     anchors.bottomMargin: 52
 
-                                    visible: defaultHover.hovered
-                                    color: Qt.rgba(0, 0, 0, 0.26)
+                                    visible:
+                                        defaultHover.hovered
+
+                                    color:
+                                        Qt.rgba(0, 0, 0, 0.26)
 
                                     QQ.Rectangle {
                                         anchors.centerIn: parent
+
                                         width: 42
                                         height: 42
                                         radius: 21
-                                        color: root.primaryContainer
+
+                                        color:
+                                            root.primaryContainer
 
                                         Controls.Label {
                                             anchors.centerIn: parent
                                             text: "✎"
-                                            color: root.textPrimaryContainer
+                                            color:
+                                                root.textPrimaryContainer
                                             font.pixelSize: 21
                                             font.bold: true
                                         }
 
                                         QQ.MouseArea {
                                             anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.openDefaultPicker()
+                                            cursorShape:
+                                                Qt.PointingHandCursor
+
+                                            onClicked:
+                                                root.openDefaultPicker()
                                         }
                                     }
                                 }
 
                                 QQ.Rectangle {
-                                    anchors.left:
-                                        parent.left
-
-                                    anchors.right:
-                                        parent.right
-
-                                    anchors.bottom:
-                                        parent.bottom
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
 
                                     height: 52
 
@@ -707,23 +1044,17 @@ ShellRoot {
                                         )
 
                                     Controls.Label {
-                                        anchors.left:
-                                            parent.left
-
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
                                         anchors.verticalCenter:
-                                            parent
-                                                .verticalCenter
+                                            parent.verticalCenter
 
-                                        anchors.leftMargin:
-                                            15
-
-                                        width:
-                                            parent.width - 120
+                                        anchors.leftMargin: 15
+                                        anchors.rightMargin: 15
 
                                         text:
-                                            root.basename(
-                                                root.configData
-                                                    .default
+                                            root.entryName(
+                                                defaultPreview.entry
                                             )
 
                                         color: "white"
@@ -731,14 +1062,11 @@ ShellRoot {
                                         elide:
                                             QQ.Text.ElideMiddle
                                     }
-
                                 }
                             }
 
                             Layouts.RowLayout {
-                                Layouts.Layout.fillWidth:
-                                    true
-
+                                Layouts.Layout.fillWidth: true
                                 spacing: 8
 
                                 Controls.Label {
@@ -763,15 +1091,12 @@ ShellRoot {
                                 }
 
                                 QQ.Item {
-                                    Layouts.Layout.fillWidth:
-                                        true
+                                    Layouts.Layout.fillWidth: true
                                 }
                             }
 
                             QQ.Flow {
-                                Layouts.Layout.fillWidth:
-                                    true
-
+                                Layouts.Layout.fillWidth: true
                                 spacing: 14
 
                                 QQ.Repeater {
@@ -786,8 +1111,8 @@ ShellRoot {
                                         property int workspace:
                                             Number(modelData)
 
-                                        property string wallpaper:
-                                            root.workspaceWallpaper(
+                                        property var entry:
+                                            root.workspaceEntry(
                                                 workspace
                                             )
 
@@ -801,28 +1126,22 @@ ShellRoot {
                                             Controls.Label {
                                                 text:
                                                     "Workspace " +
-                                                    workspaceCard
-                                                        .workspace
+                                                    workspaceCard.workspace
 
                                                 color:
                                                     root.textSurface
 
-                                                font.pixelSize:
-                                                    13
+                                                font.pixelSize: 13
 
                                                 font.bold:
                                                     root.isCurrentWorkspace(
-                                                        workspaceCard
-                                                            .workspace
+                                                        workspaceCard.workspace
                                                     )
                                             }
 
                                             ClippingRectangle {
-                                                Layouts.Layout.fillWidth:
-                                                    true
-
-                                                Layouts.Layout.fillHeight:
-                                                    true
+                                                Layouts.Layout.fillWidth: true
+                                                Layouts.Layout.fillHeight: true
 
                                                 radius: 12
 
@@ -831,8 +1150,7 @@ ShellRoot {
 
                                                 border.width:
                                                     root.isCurrentWorkspace(
-                                                        workspaceCard
-                                                            .workspace
+                                                        workspaceCard.workspace
                                                     )
                                                         ? 2
                                                         : 0
@@ -844,20 +1162,19 @@ ShellRoot {
                                                     anchors.fill: parent
 
                                                     visible:
-                                                        !root.isRandomWallpaper(
-                                                            workspaceCard.wallpaper
-                                                        )
+                                                        root.entryPreview(
+                                                            workspaceCard.entry
+                                                        ).length > 0
 
                                                     source:
-                                                        visible
-                                                            ? root.fileUrl(
-                                                                workspaceCard.wallpaper
+                                                        root.fileUrl(
+                                                            root.entryPreview(
+                                                                workspaceCard.entry
                                                             )
-                                                            : ""
+                                                        )
 
                                                     fillMode:
-                                                        QQ.Image
-                                                            .PreserveAspectCrop
+                                                        QQ.Image.PreserveAspectCrop
 
                                                     asynchronous: true
                                                     smooth: true
@@ -867,8 +1184,8 @@ ShellRoot {
                                                     anchors.fill: parent
 
                                                     visible:
-                                                        root.isRandomWallpaper(
-                                                            workspaceCard.wallpaper
+                                                        root.isRandomEntry(
+                                                            workspaceCard.entry
                                                         )
 
                                                     color:
@@ -909,81 +1226,175 @@ ShellRoot {
                                                     }
                                                 }
 
+                                                QQ.Rectangle {
+                                                    anchors.centerIn: parent
+
+                                                    visible:
+                                                        root.isVideoEntry(
+                                                            workspaceCard.entry
+                                                        ) &&
+                                                        root.entryPreview(
+                                                            workspaceCard.entry
+                                                        ).length === 0
+
+                                                    width: 46
+                                                    height: 46
+                                                    radius: 23
+
+                                                    color:
+                                                        root.primaryContainer
+
+                                                    Controls.Label {
+                                                        anchors.centerIn: parent
+                                                        text: "▶"
+                                                        color:
+                                                            root.textPrimaryContainer
+                                                        font.pixelSize: 18
+                                                    }
+                                                }
+
+                                                QQ.Rectangle {
+                                                    anchors.top: parent.top
+                                                    anchors.left: parent.left
+                                                    anchors.margins: 7
+
+                                                    visible:
+                                                        root.isVideoEntry(
+                                                            workspaceCard.entry
+                                                        )
+
+                                                    width: 24
+                                                    height: 24
+                                                    radius: 12
+
+                                                    color:
+                                                        Qt.rgba(
+                                                            0,
+                                                            0,
+                                                            0,
+                                                            0.62
+                                                        )
+
+                                                    Controls.Label {
+                                                        anchors.centerIn: parent
+                                                        text: "▶"
+                                                        color: "white"
+                                                        font.pixelSize: 10
+                                                    }
+                                                }
+
                                                 QQ.HoverHandler {
                                                     id: workspaceHover
                                                 }
 
-                                                // Persistent filename strip, matching the default preview.
                                                 QQ.Rectangle {
                                                     anchors.left: parent.left
                                                     anchors.right: parent.right
                                                     anchors.bottom: parent.bottom
 
                                                     height: 36
-                                                    color: Qt.rgba(0, 0, 0, 0.63)
+
+                                                    color:
+                                                        Qt.rgba(
+                                                            0,
+                                                            0,
+                                                            0,
+                                                            0.63
+                                                        )
 
                                                     Controls.Label {
                                                         anchors.left: parent.left
                                                         anchors.right: parent.right
-                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        anchors.verticalCenter:
+                                                            parent.verticalCenter
+
                                                         anchors.leftMargin: 9
                                                         anchors.rightMargin: 9
 
-                                                        text: root.displayWallpaperName(workspaceCard.wallpaper)
+                                                        text:
+                                                            root.entryName(
+                                                                workspaceCard.entry
+                                                            )
+
                                                         color: "white"
                                                         font.pixelSize: 10
-                                                        elide: QQ.Text.ElideMiddle
+                                                        elide:
+                                                            QQ.Text.ElideMiddle
                                                     }
                                                 }
 
-                                                // Hover action overlay.
                                                 QQ.Rectangle {
                                                     anchors.fill: parent
                                                     anchors.bottomMargin: 36
 
-                                                    visible: workspaceHover.hovered
-                                                    color: Qt.rgba(0, 0, 0, 0.34)
+                                                    visible:
+                                                        workspaceHover.hovered
+
+                                                    color:
+                                                        Qt.rgba(
+                                                            0,
+                                                            0,
+                                                            0,
+                                                            0.34
+                                                        )
 
                                                     QQ.Rectangle {
-                                                        anchors.left: parent.left
-                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        anchors.left:
+                                                            parent.left
+
+                                                        anchors.verticalCenter:
+                                                            parent.verticalCenter
+
                                                         anchors.leftMargin: 12
 
                                                         width: 38
                                                         height: 38
                                                         radius: 19
-                                                        color: root.primaryContainer
+
+                                                        color:
+                                                            root.primaryContainer
 
                                                         Controls.Label {
                                                             anchors.centerIn: parent
                                                             text: "✎"
-                                                            color: root.textPrimaryContainer
+                                                            color:
+                                                                root.textPrimaryContainer
                                                             font.pixelSize: 19
                                                             font.bold: true
                                                         }
 
                                                         QQ.MouseArea {
                                                             anchors.fill: parent
-                                                            cursorShape: Qt.PointingHandCursor
-                                                            onClicked: root.editWorkspace(workspaceCard.workspace)
+                                                            cursorShape:
+                                                                Qt.PointingHandCursor
+
+                                                            onClicked:
+                                                                root.editWorkspace(
+                                                                    workspaceCard.workspace
+                                                                )
                                                         }
                                                     }
 
                                                     QQ.Rectangle {
-                                                        anchors.right: parent.right
-                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        anchors.right:
+                                                            parent.right
+
+                                                        anchors.verticalCenter:
+                                                            parent.verticalCenter
+
                                                         anchors.rightMargin: 12
 
                                                         width: 38
                                                         height: 38
                                                         radius: 19
 
-                                                        color: Qt.rgba(
-                                                            0,
-                                                            0,
-                                                            0,
-                                                            0.34
-                                                        )
+                                                        color:
+                                                            Qt.rgba(
+                                                                0,
+                                                                0,
+                                                                0,
+                                                                0.34
+                                                            )
 
                                                         QQ.Item {
                                                             anchors.centerIn: parent
@@ -999,7 +1410,8 @@ ShellRoot {
                                                                 width: 10
                                                                 height: 12
                                                                 radius: 2
-                                                                color: parent.trashRed
+                                                                color:
+                                                                    parent.trashRed
                                                             }
 
                                                             QQ.Rectangle {
@@ -1008,7 +1420,8 @@ ShellRoot {
                                                                 width: 14
                                                                 height: 3
                                                                 radius: 1
-                                                                color: parent.trashRed
+                                                                color:
+                                                                    parent.trashRed
                                                             }
 
                                                             QQ.Rectangle {
@@ -1017,14 +1430,20 @@ ShellRoot {
                                                                 width: 6
                                                                 height: 4
                                                                 radius: 1
-                                                                color: parent.trashRed
+                                                                color:
+                                                                    parent.trashRed
                                                             }
                                                         }
 
                                                         QQ.MouseArea {
                                                             anchors.fill: parent
-                                                            cursorShape: Qt.PointingHandCursor
-                                                            onClicked: root.clearWorkspace(workspaceCard.workspace)
+                                                            cursorShape:
+                                                                Qt.PointingHandCursor
+
+                                                            onClicked:
+                                                                root.clearWorkspace(
+                                                                    workspaceCard.workspace
+                                                                )
                                                         }
                                                     }
                                                 }
@@ -1040,11 +1459,12 @@ ShellRoot {
                                 visible:
                                     root.pickerOpen
 
-                                Layouts.Layout.fillWidth:
-                                    true
+                                Layouts.Layout.fillWidth: true
 
                                 Layouts.Layout.preferredHeight:
-                                    300
+                                    root.videoEditorOpen
+                                        ? 520
+                                        : 330
 
                                 radius: 14
 
@@ -1052,7 +1472,6 @@ ShellRoot {
                                     root.surfaceContainer
 
                                 border.width: 1
-
                                 border.color:
                                     root.outlineVariant
 
@@ -1062,9 +1481,7 @@ ShellRoot {
                                     spacing: 10
 
                                     Layouts.RowLayout {
-                                        Layouts.Layout.fillWidth:
-                                            true
-
+                                        Layouts.Layout.fillWidth: true
                                         spacing: 8
 
                                         Controls.Label {
@@ -1093,11 +1510,45 @@ ShellRoot {
                                             font.bold: true
                                         }
 
+                                        QQ.Rectangle {
+                                            visible:
+                                                !root.pickingDefault &&
+                                                root.editingExistingWorkspace
+
+                                            Layouts.Layout.preferredWidth: 58
+                                            Layouts.Layout.preferredHeight: 32
+
+                                            radius: 8
+
+                                            color:
+                                                root.surfaceContainerHigh
+
+                                            border.width: 1
+
+                                            border.color:
+                                                root.outlineVariant
+
+                                            Controls.Label {
+                                                anchors.centerIn: parent
+
+                                                text:
+                                                    root.selectedWorkspace > 0
+                                                        ? root.selectedWorkspace.toString()
+                                                        : ""
+
+                                                color:
+                                                    root.primary
+
+                                                font.bold: true
+                                            }
+                                        }
+
                                         Controls.ComboBox {
                                             id: workspaceCombo
 
                                             visible:
-                                                !root.pickingDefault
+                                                !root.pickingDefault &&
+                                                !root.editingExistingWorkspace
 
                                             Layouts.Layout.preferredWidth:
                                                 180
@@ -1137,6 +1588,8 @@ ShellRoot {
                                                 root.textPrimaryContainer
 
                                             onActivated: {
+                                                root.resetVideoEditor()
+
                                                 if (currentIndex <= 0) {
                                                     root.selectedWorkspace = -1
                                                 } else {
@@ -1149,8 +1602,18 @@ ShellRoot {
                                         }
 
                                         QQ.Item {
-                                            Layouts.Layout.fillWidth:
-                                                true
+                                            Layouts.Layout.fillWidth: true
+                                        }
+
+                                        Controls.Button {
+                                            text: "Refresh"
+                                            flat: true
+
+                                            palette.buttonText:
+                                                root.primary
+
+                                            onClicked:
+                                                root.rescanMedia()
                                         }
 
                                         Controls.Button {
@@ -1170,8 +1633,7 @@ ShellRoot {
                                             !root.pickingDefault &&
                                             root.selectedWorkspace <= 0
 
-                                        Layouts.Layout.fillWidth:
-                                            true
+                                        Layouts.Layout.fillWidth: true
 
                                         text:
                                             "Select a workspace to enable wallpaper selection."
@@ -1186,28 +1648,343 @@ ShellRoot {
                                         visible:
                                             root.configWriteError.length > 0
 
-                                        Layouts.Layout.fillWidth:
-                                            true
+                                        Layouts.Layout.fillWidth: true
 
                                         text:
                                             root.configWriteError
 
-                                        color:
-                                            "#ef4444"
-
-                                        font.pixelSize:
-                                            11
-
+                                        color: "#ef4444"
+                                        font.pixelSize: 11
                                         wrapMode:
                                             QQ.Text.Wrap
                                     }
 
-                                    Controls.ScrollView {
-                                        Layouts.Layout.fillWidth:
-                                            true
+                                    Controls.Label {
+                                        visible:
+                                            root.mediaError.length > 0
 
-                                        Layouts.Layout.fillHeight:
-                                            true
+                                        Layouts.Layout.fillWidth: true
+
+                                        text:
+                                            root.mediaError
+
+                                        color: "#ef4444"
+                                        font.pixelSize: 11
+                                        wrapMode:
+                                            QQ.Text.Wrap
+                                    }
+
+                                    QQ.Rectangle {
+                                        visible:
+                                            root.videoEditorOpen
+
+                                        Layouts.Layout.fillWidth: true
+                                        Layouts.Layout.preferredHeight: 180
+
+                                        radius: 12
+                                        color:
+                                            root.surfaceContainerLow
+
+                                        border.width: 1
+                                        border.color:
+                                            root.outlineVariant
+
+                                        Layouts.ColumnLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 8
+
+                                            Layouts.RowLayout {
+                                                Layouts.Layout.fillWidth: true
+
+                                                Controls.Label {
+                                                    Layouts.Layout.fillWidth: true
+
+                                                    text:
+                                                        root.basename(
+                                                            root.selectedVideoPath
+                                                        )
+
+                                                    color:
+                                                        root.textSurface
+
+                                                    font.bold: true
+
+                                                    elide:
+                                                        QQ.Text.ElideMiddle
+                                                }
+
+                                                Controls.Label {
+                                                    text:
+                                                        root.formatTime(
+                                                            root.selectedVideoDuration
+                                                        )
+
+                                                    color:
+                                                        root.textSurfaceVariant
+
+                                                    font.pixelSize: 11
+                                                }
+
+                                                Controls.Label {
+                                                    text:
+                                                        "Frames every"
+
+                                                    color:
+                                                        root.textSurfaceVariant
+
+                                                    font.pixelSize: 11
+                                                }
+
+                                                Controls.ComboBox {
+                                                    id: intervalCombo
+
+                                                    enabled:
+                                                        !root.timelineLoading
+
+                                                    Layouts.Layout.preferredWidth: 84
+
+                                                    model:
+                                                        [1, 2, 5, 10, 15, 30]
+
+                                                    currentIndex: {
+                                                        const index =
+                                                            model.indexOf(
+                                                                root.selectedVideoInterval
+                                                            )
+
+                                                        return index >= 0
+                                                            ? index
+                                                            : 2
+                                                    }
+
+                                                    palette.button:
+                                                        root.surfaceContainerHigh
+
+                                                    palette.buttonText:
+                                                        root.textSurface
+
+                                                    onActivated: {
+                                                        root.selectedVideoInterval =
+                                                            Number(
+                                                                model[currentIndex]
+                                                            )
+
+                                                        root.loadTimeline()
+                                                    }
+                                                }
+
+                                                Controls.Label {
+                                                    text: "sec"
+                                                    color:
+                                                        root.textSurfaceVariant
+                                                    font.pixelSize: 11
+                                                }
+                                            }
+
+                                            QQ.Rectangle {
+                                                id: timelineTrack
+
+                                                Layouts.Layout.fillWidth: true
+                                                Layouts.Layout.preferredHeight: 86
+
+                                                radius: 9
+                                                clip: true
+
+                                                color:
+                                                    root.surfaceContainerHigh
+
+                                                QQ.Repeater {
+                                                    model:
+                                                        root.timelineFrames
+
+                                                    delegate: QQ.Image {
+                                                        required property var modelData
+                                                        required property int index
+
+                                                        width:
+                                                            timelineTrack.width /
+                                                            Math.max(
+                                                                1,
+                                                                root.timelineFrames.length
+                                                            )
+
+                                                        height:
+                                                            timelineTrack.height
+
+                                                        x:
+                                                            index * width
+
+                                                        source:
+                                                            root.fileUrl(
+                                                                modelData.path
+                                                            )
+
+                                                        fillMode:
+                                                            QQ.Image.PreserveAspectCrop
+
+                                                        asynchronous: true
+                                                        smooth: true
+                                                    }
+                                                }
+
+                                                QQ.Rectangle {
+                                                    anchors.fill: parent
+
+                                                    visible:
+                                                        root.timelineLoading
+
+                                                    color:
+                                                        Qt.rgba(
+                                                            0,
+                                                            0,
+                                                            0,
+                                                            0.42
+                                                        )
+
+                                                    Controls.Label {
+                                                        anchors.centerIn: parent
+                                                        text:
+                                                            "Generating frame track…"
+                                                        color: "white"
+                                                        font.pixelSize: 11
+                                                    }
+                                                }
+
+                                                QQ.Rectangle {
+                                                    id: timelineHandle
+
+                                                    visible:
+                                                        root.selectedVideoDuration > 0
+
+                                                    width: 3
+                                                    height:
+                                                        parent.height
+
+                                                    x:
+                                                        root.selectedVideoDuration > 0
+                                                            ? (
+                                                                root.selectedVideoFrame /
+                                                                root.selectedVideoDuration
+                                                              ) *
+                                                              (parent.width - width)
+                                                            : 0
+
+                                                    color:
+                                                        root.primary
+
+                                                    QQ.Rectangle {
+                                                        anchors.horizontalCenter:
+                                                            parent.horizontalCenter
+
+                                                        anchors.top:
+                                                            parent.top
+
+                                                        anchors.topMargin: 4
+
+                                                        width: 13
+                                                        height: 13
+                                                        radius: 7
+
+                                                        color:
+                                                            root.primary
+                                                    }
+                                                }
+
+                                                QQ.MouseArea {
+                                                    anchors.fill: parent
+
+                                                    enabled:
+                                                        !root.timelineLoading &&
+                                                        root.selectedVideoDuration > 0
+
+                                                    cursorShape:
+                                                        enabled
+                                                            ? Qt.SizeHorCursor
+                                                            : Qt.ArrowCursor
+
+                                                    onPressed:
+                                                        function(mouse) {
+                                                            root.setTimelinePosition(
+                                                                mouse.x,
+                                                                width
+                                                            )
+                                                        }
+
+                                                    onPositionChanged:
+                                                        function(mouse) {
+                                                            if (pressed) {
+                                                                root.setTimelinePosition(
+                                                                    mouse.x,
+                                                                    width
+                                                                )
+                                                            }
+                                                        }
+                                                }
+                                            }
+
+                                            Layouts.RowLayout {
+                                                Layouts.Layout.fillWidth: true
+
+                                                Controls.Label {
+                                                    text: "00:00"
+                                                    color:
+                                                        root.textSurfaceVariant
+                                                    font.pixelSize: 10
+                                                }
+
+                                                QQ.Item {
+                                                    Layouts.Layout.fillWidth: true
+                                                }
+
+                                                Controls.Label {
+                                                    text:
+                                                        "Theme frame  " +
+                                                        root.formatTime(
+                                                            root.selectedVideoFrame
+                                                        )
+
+                                                    color:
+                                                        root.primary
+                                                    font.pixelSize: 11
+                                                    font.bold: true
+                                                }
+
+                                                QQ.Item {
+                                                    Layouts.Layout.fillWidth: true
+                                                }
+
+                                                Controls.Label {
+                                                    text:
+                                                        root.formatTime(
+                                                            root.selectedVideoDuration
+                                                        )
+
+                                                    color:
+                                                        root.textSurfaceVariant
+                                                    font.pixelSize: 10
+                                                }
+
+                                                Controls.Button {
+                                                    text: "Use video"
+
+                                                    enabled:
+                                                        !root.timelineLoading &&
+                                                        root.selectedVideoPath.length > 0
+
+                                                    palette.buttonText:
+                                                        root.primary
+
+                                                    onClicked:
+                                                        root.commitVideo()
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Controls.ScrollView {
+                                        Layouts.Layout.fillWidth: true
+                                        Layouts.Layout.fillHeight: true
 
                                         clip: true
 
@@ -1221,22 +1998,17 @@ ShellRoot {
                                                 root.pickerItems()
 
                                             delegate: QQ.Item {
-                                                required property string modelData
+                                                required property var modelData
 
                                                 width:
-                                                    wallpaperGrid
-                                                        .cellWidth
+                                                    wallpaperGrid.cellWidth
 
                                                 height:
-                                                    wallpaperGrid
-                                                        .cellHeight
+                                                    wallpaperGrid.cellHeight
 
                                                 ClippingRectangle {
-                                                    anchors.fill:
-                                                        parent
-
-                                                    anchors.margins:
-                                                        5
+                                                    anchors.fill: parent
+                                                    anchors.margins: 5
 
                                                     radius: 10
 
@@ -1250,48 +2022,38 @@ ShellRoot {
                                                         root.surfaceContainerHigh
 
                                                     QQ.Image {
-                                                        anchors.fill:
-                                                            parent
+                                                        anchors.fill: parent
 
                                                         visible:
-                                                            !root.isRandomWallpaper(
-                                                                modelData
-                                                            )
+                                                            modelData.type !== "random" &&
+                                                            modelData.thumbnail &&
+                                                            modelData.thumbnail.length > 0
 
                                                         source:
                                                             visible
                                                                 ? root.fileUrl(
-                                                                    modelData
+                                                                    modelData.thumbnail
                                                                 )
                                                                 : ""
 
                                                         fillMode:
-                                                            QQ.Image
-                                                                .PreserveAspectCrop
+                                                            QQ.Image.PreserveAspectCrop
 
-                                                        asynchronous:
-                                                            true
-
-                                                        smooth:
-                                                            true
+                                                        asynchronous: true
+                                                        smooth: true
                                                     }
 
                                                     QQ.Rectangle {
-                                                        anchors.fill:
-                                                            parent
+                                                        anchors.fill: parent
 
                                                         visible:
-                                                            root.isRandomWallpaper(
-                                                                modelData
-                                                            )
+                                                            modelData.type === "random"
 
                                                         color:
                                                             root.primaryContainer
 
                                                         Layouts.ColumnLayout {
-                                                            anchors.centerIn:
-                                                                parent
-
+                                                            anchors.centerIn: parent
                                                             spacing: 6
 
                                                             QQ.Rectangle {
@@ -1333,35 +2095,76 @@ ShellRoot {
                                                                 Layouts.Layout.alignment:
                                                                     Qt.AlignHCenter
 
-                                                                text:
-                                                                    "Random"
+                                                                text: "Random"
 
                                                                 color:
                                                                     root.textPrimaryContainer
 
-                                                                font.bold:
-                                                                    true
-
-                                                                font.pixelSize:
-                                                                    11
+                                                                font.bold: true
+                                                                font.pixelSize: 11
                                                             }
                                                         }
                                                     }
 
                                                     QQ.Rectangle {
-                                                        anchors.left:
-                                                            parent.left
-
-                                                        anchors.right:
-                                                            parent.right
-
-                                                        anchors.bottom:
-                                                            parent.bottom
+                                                        anchors.centerIn: parent
 
                                                         visible:
-                                                            !root.isRandomWallpaper(
-                                                                modelData
+                                                            modelData.type === "video" &&
+                                                            (!modelData.thumbnail ||
+                                                             modelData.thumbnail.length === 0)
+
+                                                        width: 44
+                                                        height: 44
+                                                        radius: 22
+
+                                                        color:
+                                                            root.primaryContainer
+
+                                                        Controls.Label {
+                                                            anchors.centerIn: parent
+                                                            text: "▶"
+                                                            color:
+                                                                root.textPrimaryContainer
+                                                            font.pixelSize: 17
+                                                        }
+                                                    }
+
+                                                    QQ.Rectangle {
+                                                        anchors.top: parent.top
+                                                        anchors.left: parent.left
+                                                        anchors.margins: 7
+
+                                                        visible:
+                                                            modelData.type === "video"
+
+                                                        width: 24
+                                                        height: 24
+                                                        radius: 12
+
+                                                        color:
+                                                            Qt.rgba(
+                                                                0,
+                                                                0,
+                                                                0,
+                                                                0.62
                                                             )
+
+                                                        Controls.Label {
+                                                            anchors.centerIn: parent
+                                                            text: "▶"
+                                                            color: "white"
+                                                            font.pixelSize: 10
+                                                        }
+                                                    }
+
+                                                    QQ.Rectangle {
+                                                        anchors.left: parent.left
+                                                        anchors.right: parent.right
+                                                        anchors.bottom: parent.bottom
+
+                                                        visible:
+                                                            modelData.type !== "random"
 
                                                         height: 27
 
@@ -1374,28 +2177,21 @@ ShellRoot {
                                                             )
 
                                                         Controls.Label {
-                                                            anchors.fill:
-                                                                parent
+                                                            anchors.fill: parent
 
-                                                            anchors.leftMargin:
-                                                                7
-
-                                                            anchors.rightMargin:
-                                                                7
+                                                            anchors.leftMargin: 7
+                                                            anchors.rightMargin: 7
 
                                                             text:
                                                                 root.basename(
-                                                                    modelData
+                                                                    modelData.path
                                                                 )
 
                                                             color: "white"
-
-                                                            font.pixelSize:
-                                                                10
+                                                            font.pixelSize: 10
 
                                                             elide:
-                                                                QQ.Text
-                                                                    .ElideMiddle
+                                                                QQ.Text.ElideMiddle
 
                                                             verticalAlignment:
                                                                 Qt.AlignVCenter
@@ -1403,8 +2199,7 @@ ShellRoot {
                                                     }
 
                                                     QQ.MouseArea {
-                                                        anchors.fill:
-                                                            parent
+                                                        anchors.fill: parent
 
                                                         enabled:
                                                             root.pickingDefault ||
@@ -1416,7 +2211,7 @@ ShellRoot {
                                                                 : Qt.ArrowCursor
 
                                                         onClicked:
-                                                            root.assignWallpaper(
+                                                            root.handlePickerItem(
                                                                 modelData
                                                             )
                                                     }

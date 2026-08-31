@@ -1,37 +1,51 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
 CONFIG="$HOME/.config/caelestia/workspace-wallpapers.json"
 RANDOM_VALUE="__CAELESTIA_RANDOM__"
 
 usage() {
-    echo "usage:"
-    echo "  $0 set-default /absolute/path"
-    echo "  $0 set WORKSPACE /absolute/path|$RANDOM_VALUE"
-    echo "  $0 clear WORKSPACE"
+    echo "usage:" >&2
+    echo "  $0 set-default /absolute/image/path" >&2
+    echo "  $0 set WORKSPACE /absolute/image/path|$RANDOM_VALUE" >&2
+    echo "  $0 set-video-default /absolute/video/path FRAME_SECONDS INTERVAL_SECONDS" >&2
+    echo "  $0 set-video WORKSPACE /absolute/video/path FRAME_SECONDS INTERVAL_SECONDS" >&2
+    echo "  $0 clear WORKSPACE" >&2
     exit 1
 }
 
-[[ -f "$CONFIG" ]] || {
-    mkdir -p "$(dirname "$CONFIG")"
-    printf '{\n  "default": "",\n  "workspaces": {}\n}\n' > "$CONFIG"
+ensure_config() {
+    if [[ ! -f "$CONFIG" ]]; then
+        mkdir -p "$(dirname "$CONFIG")"
+        printf '{\n  "default": "",\n  "workspaces": {}\n}\n' > "$CONFIG"
+    fi
 }
+
+atomic_jq() {
+    local tmp
+    tmp="$(mktemp "${CONFIG}.XXXXXX")"
+    jq "$@" "$CONFIG" > "$tmp"
+    mv "$tmp" "$CONFIG"
+}
+
+valid_number() {
+    [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ ]]
+}
+
+ensure_config
 
 command="${1:-}"
 
 case "$command" in
     set-default)
         path="${2:-}"
-
         [[ -f "$path" ]] || {
             echo "Wallpaper does not exist: $path" >&2
             exit 1
         }
 
-        tmp="$(mktemp)"
-        jq --arg path "$path" '.default = $path' "$CONFIG" > "$tmp"
-        mv "$tmp" "$CONFIG"
+        atomic_jq --arg path "$path" \
+            '.default = $path'
         ;;
 
     set)
@@ -45,25 +59,71 @@ case "$command" in
             exit 1
         fi
 
-        tmp="$(mktemp)"
-        jq \
+        atomic_jq \
             --arg ws "$workspace" \
             --arg path "$path" \
-            '.workspaces[$ws] = $path' \
-            "$CONFIG" > "$tmp"
-        mv "$tmp" "$CONFIG"
+            '.workspaces[$ws] = $path'
+        ;;
+
+    set-video-default)
+        path="${2:-}"
+        frame="${3:-}"
+        interval="${4:-}"
+
+        [[ -f "$path" ]] || {
+            echo "Video does not exist: $path" >&2
+            exit 1
+        }
+
+        valid_number "$frame" || usage
+        valid_number "$interval" || usage
+
+        atomic_jq \
+            --arg path "$path" \
+            --argjson frame "$frame" \
+            --argjson interval "$interval" \
+            '.default = {
+                type: "video",
+                path: $path,
+                themeFrame: $frame,
+                interval: $interval
+            }'
+        ;;
+
+    set-video)
+        workspace="${2:-}"
+        path="${3:-}"
+        frame="${4:-}"
+        interval="${5:-}"
+
+        [[ -n "$workspace" && -f "$path" ]] || {
+            echo "Video does not exist or workspace is missing: $path" >&2
+            exit 1
+        }
+
+        valid_number "$frame" || usage
+        valid_number "$interval" || usage
+
+        atomic_jq \
+            --arg ws "$workspace" \
+            --arg path "$path" \
+            --argjson frame "$frame" \
+            --argjson interval "$interval" \
+            '.workspaces[$ws] = {
+                type: "video",
+                path: $path,
+                themeFrame: $frame,
+                interval: $interval
+            }'
         ;;
 
     clear)
         workspace="${2:-}"
         [[ -n "$workspace" ]] || usage
 
-        tmp="$(mktemp)"
-        jq \
+        atomic_jq \
             --arg ws "$workspace" \
-            'del(.workspaces[$ws])' \
-            "$CONFIG" > "$tmp"
-        mv "$tmp" "$CONFIG"
+            'del(.workspaces[$ws])'
         ;;
 
     *)

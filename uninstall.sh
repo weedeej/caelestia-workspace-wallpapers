@@ -6,6 +6,8 @@ rmdir "$HOME/.config/quickshell/workspace-wallpapers" 2>/dev/null || true
 
 rm -f "$HOME/.config/caelestia/scripts/workspace-wallpaper"
 rm -f "$HOME/.config/caelestia/scripts/workspace-wallpaper-config"
+rm -f "$HOME/.config/caelestia/scripts/workspace-wallpaper-media"
+
 rm -f "$HOME/.local/share/applications/workspace-wallpapers.desktop"
 
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -13,4 +15,4 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 
 echo "Workspace Wallpapers files removed."
-echo "Your ~/.config/caelestia/workspace-wallpapers.json was left untouched."
+echo "Configuration and thumbnail cache were left untouched."

@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+
+import concurrent.futures
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+HOME = Path.home()
+IMAGE_DIR = HOME / "Pictures" / "Wallpapers"
+VIDEO_DIR = HOME / "Videos" / "Wallpapers"
+CACHE_ROOT = HOME / ".cache" / "caelestia-workspace-wallpapers" / "videos"
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+VIDEO_EXTS = {".mp4", ".webm", ".mkv", ".mov", ".m4v", ".avi"}
+
+def fail(message, code=1):
+    print(message, file=sys.stderr)
+    raise SystemExit(code)
+
+def run(command):
+    return subprocess.run(
+        command,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+def video_duration(path):
+    result = run([
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ])
+
+    try:
+        return max(0.0, float(result.stdout.strip()))
+    except ValueError:
+        return 0.0
+
+def cache_dir(path):
+    resolved = path.resolve()
+    stat = resolved.stat()
+    key_source = (
+        f"{resolved}\0{stat.st_size}\0{stat.st_mtime_ns}"
+    ).encode("utf-8")
+    key = hashlib.sha256(key_source).hexdigest()[:24]
+    directory = CACHE_ROOT / key
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+def extract_scaled(path, seconds, output, width):
+    if output.exists() and output.stat().st_size > 0:
+        return output
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temp = output.with_name(output.stem + ".tmp" + output.suffix)
+
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel", "error",
+        "-ss", f"{max(0.0, seconds):.3f}",
+        "-i", str(path),
+        "-frames:v", "1",
+        "-vf", f"scale={width}:-2",
+        "-q:v", "4",
+        "-y",
+        str(temp),
+    ]
+
+    try:
+        run(command)
+        temp.replace(output)
+    finally:
+        if temp.exists():
+            temp.unlink(missing_ok=True)
+
+    return output
+
+def extract_theme_frame(path, seconds, output):
+    if output.exists() and output.stat().st_size > 0:
+        return output
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temp = output.with_name(output.stem + ".tmp" + output.suffix)
+
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel", "error",
+        "-ss", f"{max(0.0, seconds):.3f}",
+        "-i", str(path),
+        "-frames:v", "1",
+        "-q:v", "2",
+        "-y",
+        str(temp),
+    ]
+
+    try:
+        run(command)
+        temp.replace(output)
+    finally:
+        if temp.exists():
+            temp.unlink(missing_ok=True)
+
+    return output
+
+def card_thumbnail(path, duration):
+    directory = cache_dir(path)
+    output = directory / "card.jpg"
+    timestamp = min(1.0, max(0.0, duration * 0.1))
+    return extract_scaled(path, timestamp, output, 480)
+
+def scan():
+    items = []
+
+    if IMAGE_DIR.exists():
+        for path in sorted(IMAGE_DIR.iterdir(), key=lambda p: p.name.lower()):
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTS:
+                items.append({
+                    "type": "image",
+                    "path": str(path.resolve()),
+                    "thumbnail": str(path.resolve()),
+                    "duration": 0,
+                })
+
+    if VIDEO_DIR.exists():
+        for path in sorted(VIDEO_DIR.iterdir(), key=lambda p: p.name.lower()):
+            if not path.is_file() or path.suffix.lower() not in VIDEO_EXTS:
+                continue
+
+            try:
+                duration = video_duration(path)
+                thumb = card_thumbnail(path, duration)
+                items.append({
+                    "type": "video",
+                    "path": str(path.resolve()),
+                    "thumbnail": str(thumb.resolve()),
+                    "duration": duration,
+                })
+            except Exception as exc:
+                print(f"Skipping {path.name}: {exc}", file=sys.stderr)
+
+    items.sort(key=lambda item: Path(item["path"]).name.lower())
+    print(json.dumps(items, ensure_ascii=False))
+
+def timeline(video, interval):
+    path = Path(video).expanduser().resolve()
+
+    if not path.is_file():
+        fail(f"Video does not exist: {path}")
+
+    interval = max(1, int(interval))
+    duration = video_duration(path)
+    directory = cache_dir(path)
+
+    if duration <= 0:
+        times = [0.0]
+    else:
+        count = int(math.floor(duration / interval)) + 1
+        times = [float(index * interval) for index in range(count)]
+
+    def create(timestamp):
+        millis = int(round(timestamp * 1000))
+        output = directory / f"thumb-{millis:010d}.jpg"
+        extract_scaled(path, timestamp, output, 320)
+        return {
+            "time": timestamp,
+            "path": str(output.resolve()),
+        }
+
+    frames = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        for frame in pool.map(create, times):
+            frames.append(frame)
+
+    print(json.dumps({
+        "duration": duration,
+        "interval": interval,
+        "frames": frames,
+    }, ensure_ascii=False))
+
+def frame(video, seconds):
+    path = Path(video).expanduser().resolve()
+
+    if not path.is_file():
+        fail(f"Video does not exist: {path}")
+
+    seconds = max(0.0, float(seconds))
+    duration = video_duration(path)
+
+    if duration > 0:
+        seconds = min(seconds, max(0.0, duration - 0.001))
+
+    millis = int(round(seconds * 1000))
+    output = cache_dir(path) / f"theme-{millis:010d}.jpg"
+    extract_theme_frame(path, seconds, output)
+    print(str(output.resolve()))
+
+def main():
+    if len(sys.argv) < 2:
+        fail(
+            "usage: workspace-wallpaper-media "
+            "scan | timeline VIDEO INTERVAL | frame VIDEO SECONDS"
+        )
+
+    command = sys.argv[1]
+
+    if command == "scan":
+        scan()
+    elif command == "timeline" and len(sys.argv) == 4:
+        timeline(sys.argv[2], sys.argv[3])
+    elif command == "frame" and len(sys.argv) == 4:
+        frame(sys.argv[2], sys.argv[3])
+    else:
+        fail("Invalid workspace-wallpaper-media command.")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as exc:
+        message = (exc.stderr or "").strip()
+        fail(message or f"Command failed: {exc.cmd}")
+    except (OSError, ValueError) as exc:
+        fail(str(exc))

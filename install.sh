@@ -8,12 +8,46 @@ CAELESTIA_SCRIPTS="$HOME/.config/caelestia/scripts"
 APP_DIR="$HOME/.local/share/applications"
 CONFIG="$HOME/.config/caelestia/workspace-wallpapers.json"
 
-mkdir -p "$QS_DIR" "$CAELESTIA_SCRIPTS" "$APP_DIR" "$(dirname "$CONFIG")"
+missing=()
 
-install -m 0644 "$ROOT/quickshell/shell.qml" "$QS_DIR/shell.qml"
-install -m 0755 "$ROOT/scripts/workspace-wallpaper" "$CAELESTIA_SCRIPTS/workspace-wallpaper"
-install -m 0755 "$ROOT/scripts/workspace-wallpaper-config" "$CAELESTIA_SCRIPTS/workspace-wallpaper-config"
-install -m 0644 "$ROOT/desktop/workspace-wallpapers.desktop" "$APP_DIR/workspace-wallpapers.desktop"
+for command in qs caelestia jq python3 ffmpeg ffprobe hyprctl mpvpaper; do
+    command -v "$command" >/dev/null 2>&1 ||
+        missing+=("$command")
+done
+
+if ((${#missing[@]} > 0)); then
+    printf 'Missing required commands: %s\n' "${missing[*]}" >&2
+    echo "Install/build the missing dependencies, then rerun ./install.sh." >&2
+    exit 1
+fi
+
+mkdir -p \
+    "$QS_DIR" \
+    "$CAELESTIA_SCRIPTS" \
+    "$APP_DIR" \
+    "$HOME/Pictures/Wallpapers" \
+    "$HOME/Videos/Wallpapers" \
+    "$(dirname "$CONFIG")"
+
+install -m 0644 \
+    "$ROOT/quickshell/shell.qml" \
+    "$QS_DIR/shell.qml"
+
+install -m 0755 \
+    "$ROOT/scripts/workspace-wallpaper" \
+    "$CAELESTIA_SCRIPTS/workspace-wallpaper"
+
+install -m 0755 \
+    "$ROOT/scripts/workspace-wallpaper-config" \
+    "$CAELESTIA_SCRIPTS/workspace-wallpaper-config"
+
+install -m 0755 \
+    "$ROOT/scripts/workspace-wallpaper-media" \
+    "$CAELESTIA_SCRIPTS/workspace-wallpaper-media"
+
+install -m 0644 \
+    "$ROOT/desktop/workspace-wallpapers.desktop" \
+    "$APP_DIR/workspace-wallpapers.desktop"
 
 if [[ ! -f "$CONFIG" ]]; then
     cat > "$CONFIG" <<EOF
@@ -30,9 +64,12 @@ fi
 
 echo
 echo "Workspace Wallpapers installed."
+echo
+echo "Image directory:  ~/Pictures/Wallpapers"
+echo "Video directory:  ~/Videos/Wallpapers"
+echo
 echo "Next:"
 echo "  1. Add examples/workspace-hook.lua to your Caelestia Lua config."
-echo "  2. Put wallpapers in ~/Pictures/Wallpapers."
-echo "  3. Run: qs -c workspace-wallpapers"
+echo "  2. Run: qs -c workspace-wallpapers"
 echo
-echo "You can also launch 'Workspace Wallpapers' from your app launcher."
+echo "You can also launch Workspace Wallpapers from your app launcher."

@@ -1,51 +1,243 @@
 #!/usr/bin/env bash
-
 set -u
 
 CONFIG="$HOME/.config/caelestia/workspace-wallpapers.json"
-WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
+IMAGE_DIR="$HOME/Pictures/Wallpapers"
 RANDOM_VALUE="__CAELESTIA_RANDOM__"
+MEDIA_HELPER="$HOME/.config/caelestia/scripts/workspace-wallpaper-media"
+SCHEME_FILE="$HOME/.local/state/caelestia/scheme.json"
 
 WORKSPACE="${1:-}"
 [[ -n "$WORKSPACE" ]] || exit 0
+[[ -f "$CONFIG" ]] || exit 0
 
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 STATE="$RUNTIME_DIR/caelestia-workspace-wallpaper"
 LOCK="$RUNTIME_DIR/caelestia-workspace-wallpaper.lock"
+VIDEO_STATE_DIR="$RUNTIME_DIR/caelestia-workspace-wallpaper-video"
 
-# Record the newest requested workspace.
+mkdir -p "$VIDEO_STATE_DIR"
+
 printf '%s\n' "$WORKSPACE" > "$STATE"
 
-# Debounce quick accidental workspace switching.
+# Debounce fast workspace changes.
 sleep 0.20
 
 [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
-[[ -f "$CONFIG" ]] || exit 0
 
-DEFAULT="$(jq -r '.default // empty' "$CONFIG")"
-OVERRIDE="$(jq -r --arg ws "$WORKSPACE" '.workspaces[$ws] // empty' "$CONFIG")"
+ENTRY="$(
+    jq -c \
+        --arg ws "$WORKSPACE" \
+        'if (.workspaces[$ws] // null) != null
+         then .workspaces[$ws]
+         else .default
+         end' \
+        "$CONFIG"
+)"
 
-WALLPAPER="${OVERRIDE:-$DEFAULT}"
-[[ -n "$WALLPAPER" ]] || exit 0
+[[ -n "$ENTRY" && "$ENTRY" != "null" && "$ENTRY" != '""' ]] || exit 0
 
-# A Random override is resolved every time this workspace is entered.
-if [[ "$WALLPAPER" == "$RANDOM_VALUE" ]]; then
-    mapfile -d '' WALLPAPERS < <(
-        find "$WALLPAPER_DIR" -maxdepth 1 -type f \
-            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
-            -print0
-    )
+workspace_output() {
+    local output
 
-    ((${#WALLPAPERS[@]} > 0)) || exit 0
-    WALLPAPER="${WALLPAPERS[RANDOM % ${#WALLPAPERS[@]}]}"
-fi
+    output="$(
+        hyprctl monitors -j 2>/dev/null |
+            jq -r \
+                --argjson ws "$WORKSPACE" \
+                '.[] |
+                 select(.activeWorkspace.id == $ws) |
+                 .name' |
+            head -n 1
+    )"
 
-[[ -f "$WALLPAPER" ]] || exit 0
+    if [[ -z "$output" ]]; then
+        output="$(
+            hyprctl monitors -j 2>/dev/null |
+                jq -r \
+                    '.[] |
+                     select(.focused == true) |
+                     .name' |
+                head -n 1
+        )"
+    fi
+
+    printf '%s' "$output"
+}
+
+safe_output_name() {
+    printf '%s' "$1" | tr -c '[:alnum:]_.-' '_'
+}
+
+stop_video_for_output() {
+    local output="$1"
+    local safe
+    local pidfile
+    local pid
+    local attempt
+    local args
+
+    safe="$(safe_output_name "$output")"
+    pidfile="$VIDEO_STATE_DIR/$safe.pid"
+
+    [[ -f "$pidfile" ]] || return 0
+
+    pid="$(cat "$pidfile" 2>/dev/null || true)"
+    rm -f "$pidfile"
+
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 0
+    [[ -r "/proc/$pid/cmdline" ]] || return 0
+
+    args="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+
+    # Never kill an unrelated process if a stale PID has been reused.
+    [[ "$args" == *"mpvpaper"* ]] || return 0
+    [[ "$args" == *" $output "* ]] || return 0
+
+    kill -TERM "$pid" 2>/dev/null || return 0
+
+    # Only pay a shutdown wait when a video is actually active.
+    for attempt in {1..4}; do
+        kill -0 "$pid" 2>/dev/null || return 0
+        sleep 0.025
+    done
+
+    # Wallpaper process did not release quickly enough.
+    kill -KILL "$pid" 2>/dev/null || true
+}
+
+scheme_hash() {
+    if [[ -f "$SCHEME_FILE" ]]; then
+        sha256sum "$SCHEME_FILE" 2>/dev/null |
+            awk '{print $1}'
+    fi
+}
+
+wait_for_scheme_change() {
+    local before="$1"
+    local current
+    local attempt
+
+    for attempt in {1..12}; do
+        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || return 1
+
+        current="$(scheme_hash)"
+
+        if [[ -n "$current" && "$current" != "$before" ]]; then
+            return 0
+        fi
+
+        sleep 0.05
+    done
+
+    # A reference frame can legitimately produce an identical scheme.
+    return 0
+}
+
+OUTPUT="$(workspace_output)"
+[[ -n "$OUTPUT" ]] || exit 0
 
 exec 9>"$LOCK"
 flock 9
 
-# A newer workspace request may have arrived while waiting for the lock.
 [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
 
-caelestia wallpaper -f "$WALLPAPER"
+TYPE="$(
+    jq -r \
+        'if type == "object"
+         then (.type // "image")
+         elif type == "string" and . == "'"$RANDOM_VALUE"'"
+         then "random"
+         else "image"
+         end' \
+        <<<"$ENTRY"
+)"
+
+case "$TYPE" in
+    video)
+        VIDEO="$(
+            jq -r '.path // empty' <<<"$ENTRY"
+        )"
+        FRAME="$(
+            jq -r '.themeFrame // 0' <<<"$ENTRY"
+        )"
+
+        [[ -f "$VIDEO" ]] || exit 0
+        [[ -x "$MEDIA_HELPER" ]] || exit 0
+        command -v mpvpaper >/dev/null 2>&1 || exit 0
+
+        stop_video_for_output "$OUTPUT"
+
+        REFERENCE="$(
+            "$MEDIA_HELPER" frame "$VIDEO" "$FRAME"
+        )"
+
+        [[ -f "$REFERENCE" ]] || exit 0
+        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+
+        BEFORE_SCHEME="$(scheme_hash)"
+
+        # Caelestia sees the selected still long enough to update its
+        # adaptive palette. mpvpaper is started only after that handoff.
+        caelestia wallpaper -f "$REFERENCE"
+
+        wait_for_scheme_change "$BEFORE_SCHEME" || exit 0
+
+        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+
+        SAFE_OUTPUT="$(safe_output_name "$OUTPUT")"
+        PIDFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.pid"
+        LOGFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.log"
+
+        # fd 9 owns the workspace switch flock. Close it in the child
+        # before exec so mpvpaper cannot keep the lock alive after this script exits.
+        setsid mpvpaper \
+            -o "loop-file=inf no-audio panscan=1.0" \
+            "$OUTPUT" \
+            "$VIDEO" \
+            </dev/null \
+            >>"$LOGFILE" 2>&1 \
+            9>&- &
+
+        MPV_PID=$!
+        printf '%s\n' "$MPV_PID" > "$PIDFILE"
+        ;;
+
+    random)
+        stop_video_for_output "$OUTPUT"
+
+        mapfile -d '' WALLPAPERS < <(
+            find "$IMAGE_DIR" -maxdepth 1 -type f \
+                \( -iname '*.jpg' -o \
+                   -iname '*.jpeg' -o \
+                   -iname '*.png' -o \
+                   -iname '*.webp' \) \
+                -print0
+        )
+
+        ((${#WALLPAPERS[@]} > 0)) || exit 0
+
+        RANDOM_INDEX=$((RANDOM % ${#WALLPAPERS[@]}))
+        WALLPAPER="${WALLPAPERS[$RANDOM_INDEX]}"
+
+        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+        caelestia wallpaper -f "$WALLPAPER"
+        ;;
+
+    *)
+        WALLPAPER="$(
+            jq -r \
+                'if type == "string"
+                 then .
+                 else (.path // empty)
+                 end' \
+                <<<"$ENTRY"
+        )"
+
+        [[ -f "$WALLPAPER" ]] || exit 0
+
+        stop_video_for_output "$OUTPUT"
+
+        [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
+        caelestia wallpaper -f "$WALLPAPER"
+        ;;
+esac

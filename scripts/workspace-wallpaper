@@ -170,6 +170,15 @@ case "$TYPE" in
         is_current_workspace || exit 0
 
         BEFORE_SCHEME="$(scheme_stamp)"
+
+        # Caelestia sees the selected still long enough to update its
+        # adaptive palette. mpvpaper is started only after that handoff.
+        caelestia wallpaper -f "$REFERENCE"
+
+        wait_for_scheme_change "$BEFORE_SCHEME" || exit 0
+
+        is_current_workspace || exit 0
+
         SAFE_OUTPUT="$(safe_output_name "$OUTPUT")"
         PIDFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.pid"
         LOGFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.log"
@@ -186,18 +195,6 @@ case "$TYPE" in
 
         MPV_PID=$!
         printf '%s\n' "$MPV_PID" > "$PIDFILE"
-
-        if ! is_current_workspace; then
-            stop_video_for_output "$OUTPUT"
-            exit 0
-        fi
-
-        caelestia wallpaper -f "$REFERENCE"
-
-        if ! wait_for_scheme_change "$BEFORE_SCHEME"; then
-            stop_video_for_output "$OUTPUT"
-            exit 0
-        fi
         ;;
 
     random)

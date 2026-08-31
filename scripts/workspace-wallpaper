@@ -188,7 +188,7 @@ case "$TYPE" in
         # fd 9 owns the workspace switch flock. Close it in the child
         # before exec so mpvpaper cannot keep the lock alive after this script exits.
         setsid mpvpaper \
-            -o "loop-file=inf no-audio panscan=1.0" \
+            -o "loop-file=inf no-audio panscan=1.0 hwdec=auto-safe" \
             "$OUTPUT" \
             "$VIDEO" \
             </dev/null \

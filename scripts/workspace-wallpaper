@@ -20,9 +20,6 @@ mkdir -p "$VIDEO_STATE_DIR"
 
 printf '%s\n' "$WORKSPACE" > "$STATE"
 
-# Debounce fast workspace changes.
-sleep 0.20
-
 [[ "$(cat "$STATE" 2>/dev/null)" == "$WORKSPACE" ]] || exit 0
 
 ENTRY="$(

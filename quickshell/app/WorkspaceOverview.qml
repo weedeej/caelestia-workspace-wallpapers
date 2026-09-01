@@ -1,6 +1,7 @@
 import QtQuick as QQ
 import QtQuick.Controls as Controls
 import QtQuick.Layouts as Layouts
+import Caelestia.Config
 import "PathUtils.js" as PathUtils
 
 Layouts.ColumnLayout {
@@ -9,13 +10,12 @@ Layouts.ColumnLayout {
     required property var state
     required property var picker
     required property var configService
-    spacing: 18
+    spacing: Tokens.spacing.large
 
     Controls.Label {
         text: "DEFAULT  (all non-custom use this)"
         color: overview.state.textSurfaceVariant
-        font.pixelSize: 12
-        font.bold: true
+        font: Tokens.font.label.small
     }
 
     WallpaperCard {
@@ -33,6 +33,8 @@ Layouts.ColumnLayout {
         primaryColor: overview.state.primary
         primaryContainerColor: overview.state.primaryContainer
         textPrimaryContainerColor: overview.state.textPrimaryContainer
+        errorColor: overview.state.error
+        scrimColor: overview.state.scrim
         onEditRequested: function(anchorItem) {
             overview.picker.openDefault(anchorItem)
         }
@@ -40,13 +42,14 @@ Layouts.ColumnLayout {
 
     Layouts.RowLayout {
         Layouts.Layout.fillWidth: true
-        spacing: 8
+        spacing: Tokens.spacing.small
+
         Controls.Label {
             text: "WORKSPACES"
             color: overview.state.textSurfaceVariant
-            font.pixelSize: 12
-            font.bold: true
+            font: Tokens.font.label.small
         }
+
         LinkButton {
             id: addWorkspaceButton
             text: "+ Add"
@@ -54,13 +57,15 @@ Layouts.ColumnLayout {
             disabledTextColor: Qt.alpha(overview.state.textSurface, 0.38)
             onClicked: overview.picker.beginAddWorkspace(addWorkspaceButton)
         }
+
         QQ.Item { Layouts.Layout.fillWidth: true }
     }
 
     QQ.Flow {
         id: workspaceFlow
         Layouts.Layout.fillWidth: true
-        spacing: 14
+        spacing: Tokens.spacing.medium
+
         readonly property int columnCount: Math.max(
             1, Math.floor((width + spacing) / (160 + spacing))
         )
@@ -69,6 +74,7 @@ Layouts.ColumnLayout {
 
         QQ.Repeater {
             model: overview.state.overrideWorkspaceIds()
+
             delegate: QQ.Item {
                 id: workspaceCard
                 required property var modelData
@@ -79,15 +85,16 @@ Layouts.ColumnLayout {
 
                 Layouts.ColumnLayout {
                     anchors.fill: parent
-                    spacing: 6
+                    spacing: Tokens.spacing.extraSmall
+
                     Controls.Label {
                         text: "Workspace " + workspaceCard.workspace
                         color: overview.state.textSurface
-                        font.pixelSize: 13
-                        font.bold: overview.state.isCurrentWorkspace(
+                        font: overview.state.isCurrentWorkspace(
                             workspaceCard.workspace
-                        )
+                        ) ? Tokens.font.label.large : Tokens.font.label.medium
                     }
+
                     WallpaperCard {
                         Layouts.Layout.fillWidth: true
                         Layouts.Layout.fillHeight: true
@@ -105,8 +112,9 @@ Layouts.ColumnLayout {
                         backgroundColor: overview.state.surfaceContainerHigh
                         primaryColor: overview.state.primary
                         primaryContainerColor: overview.state.primaryContainer
-                        textPrimaryContainerColor:
-                            overview.state.textPrimaryContainer
+                        textPrimaryContainerColor: overview.state.textPrimaryContainer
+                        errorColor: overview.state.error
+                        scrimColor: overview.state.scrim
                         onEditRequested: function(anchorItem) {
                             overview.picker.editWorkspace(
                                 workspaceCard.workspace, anchorItem

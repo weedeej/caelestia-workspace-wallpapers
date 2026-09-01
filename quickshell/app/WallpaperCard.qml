@@ -1,7 +1,8 @@
 import QtQuick as QQ
 import QtQuick.Controls as Controls
-
+import QtQuick.Layouts as Layouts
 import Quickshell.Widgets
+import Caelestia.Config
 
 ClippingRectangle {
     id: card
@@ -17,16 +18,25 @@ ClippingRectangle {
     required property var primaryColor
     required property var primaryContainerColor
     required property var textPrimaryContainerColor
+    required property var errorColor
+    required property var scrimColor
 
     property bool compact: false
 
     signal editRequested(var anchorItem)
     signal removeRequested()
 
-    radius: compact ? 12 : 16
+    radius: compact ? Tokens.rounding.medium : Tokens.rounding.large
     color: backgroundColor
     border.width: current ? 2 : 0
     border.color: primaryColor
+
+    QQ.Behavior on color {
+        QQ.ColorAnimation {
+            duration: Tokens.anim.durations.expressiveSlowEffects
+            easing: Tokens.anim.expressiveSlowEffects
+        }
+    }
 
     QQ.Image {
         anchors.fill: parent
@@ -42,29 +52,13 @@ ClippingRectangle {
         visible: card.random
         color: card.primaryContainerColor
 
-        QQ.Rectangle {
+        Controls.Label {
             anchors.centerIn: parent
-            width: card.compact ? 42 : 54
-            height: width
-            radius: card.compact ? 9 : 12
+            text: "casino"
             color: card.textPrimaryContainerColor
-
-            QQ.Repeater {
-                model: card.compact
-                    ? [[9, 9], [27, 9], [18, 18], [9, 27], [27, 27]]
-                    : [[12, 12], [36, 12], [24, 24], [12, 36], [36, 36]]
-
-                delegate: QQ.Rectangle {
-                    required property var modelData
-
-                    width: card.compact ? 6 : 7
-                    height: width
-                    radius: width / 2
-                    x: modelData[0]
-                    y: modelData[1]
-                    color: card.primaryContainerColor
-                }
-            }
+            font: card.compact
+                ? Tokens.font.icon.large
+                : Tokens.font.icon.extraLarge
         }
     }
 
@@ -73,64 +67,74 @@ ClippingRectangle {
         visible: card.video && card.preview.length === 0
         width: card.compact ? 46 : 64
         height: width
-        radius: width / 2
+        radius: height / 2 * Math.min(1, Tokens.rounding.scale)
         color: card.primaryContainerColor
 
         Controls.Label {
             anchors.centerIn: parent
-            text: "▶"
+            text: "play_arrow"
             color: card.textPrimaryContainerColor
-            font.pixelSize: card.compact ? 18 : 24
+            font: card.compact
+                ? Tokens.font.icon.medium
+                : Tokens.font.icon.large
         }
     }
 
     QQ.Rectangle {
         anchors.top: parent.top
         anchors.left: parent.left
-        anchors.margins: card.compact ? 7 : 10
+        anchors.margins:
+            card.compact ? Tokens.padding.small : Tokens.padding.medium
         visible: card.video
-        width: card.compact ? 24 : 56
+        implicitWidth: badgeRow.implicitWidth + Tokens.padding.small * 2
         height: 24
-        radius: height / 2
-        color: Qt.rgba(0, 0, 0, 0.62)
+        radius: height / 2 * Math.min(1, Tokens.rounding.scale)
+        color: Qt.alpha(card.scrimColor, 0.62)
 
-        Controls.Label {
+        Layouts.RowLayout {
+            id: badgeRow
             anchors.centerIn: parent
-            text: card.compact ? "▶" : "▶ VIDEO"
-            color: "white"
-            font.pixelSize: card.compact ? 10 : 9
-            font.bold: true
+            spacing: Math.max(1, Math.round(Tokens.spacing.extraSmall / 2))
+
+            Controls.Label {
+                text: "play_arrow"
+                color: "white"
+                font: Tokens.font.icon.small
+            }
+
+            Controls.Label {
+                visible: !card.compact
+                text: "VIDEO"
+                color: "white"
+                font: Tokens.font.label.small
+            }
         }
     }
 
-    QQ.HoverHandler {
-        id: hover
-    }
+    QQ.HoverHandler { id: hover }
 
     QQ.Rectangle {
         anchors.fill: parent
         anchors.bottomMargin: card.compact ? 36 : 52
         visible: hover.hovered
-        color: Qt.rgba(0, 0, 0, card.compact ? 0.34 : 0.26)
+        color: Qt.alpha(card.scrimColor, card.compact ? 0.34 : 0.26)
 
         QQ.Rectangle {
             id: editButton
-
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: card.compact ? parent.left : undefined
-            anchors.leftMargin: card.compact ? 12 : 0
+            anchors.leftMargin: card.compact ? Tokens.padding.medium : 0
             anchors.horizontalCenter: card.compact ? undefined : parent.horizontalCenter
             width: card.compact ? 38 : 42
             height: width
-            radius: width / 2
+            radius: height / 2 * Math.min(1, Tokens.rounding.scale)
             color: card.primaryContainerColor
 
             Controls.Label {
                 anchors.centerIn: parent
-                text: "✎"
+                text: "edit"
                 color: card.textPrimaryContainerColor
-                font.pixelSize: card.compact ? 19 : 21
-                font.bold: true
+                font: Tokens.font.icon.medium
             }
 
             QQ.MouseArea {
@@ -143,46 +147,18 @@ ClippingRectangle {
         QQ.Rectangle {
             visible: card.removable
             anchors.right: parent.right
-            anchors.rightMargin: 12
+            anchors.rightMargin: Tokens.padding.medium
             anchors.verticalCenter: parent.verticalCenter
             width: 38
             height: width
-            radius: width / 2
-            color: Qt.rgba(0, 0, 0, 0.34)
+            radius: height / 2 * Math.min(1, Tokens.rounding.scale)
+            color: Qt.alpha(card.scrimColor, 0.34)
 
-            QQ.Item {
+            Controls.Label {
                 anchors.centerIn: parent
-                width: 18
-                height: 20
-
-                readonly property var trashRed: "#ef4444"
-
-                QQ.Rectangle {
-                    x: 4
-                    y: 5
-                    width: 10
-                    height: 12
-                    radius: 2
-                    color: parent.trashRed
-                }
-
-                QQ.Rectangle {
-                    x: 2
-                    y: 3
-                    width: 14
-                    height: 3
-                    radius: 1
-                    color: parent.trashRed
-                }
-
-                QQ.Rectangle {
-                    x: 6
-                    y: 0
-                    width: 6
-                    height: 4
-                    radius: 1
-                    color: parent.trashRed
-                }
+                text: "delete"
+                color: card.errorColor
+                font: Tokens.font.icon.medium
             }
 
             QQ.MouseArea {
@@ -198,15 +174,19 @@ ClippingRectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: card.compact ? 36 : 52
-        color: Qt.rgba(0, 0, 0, 0.63)
+        color: Qt.alpha(card.scrimColor, 0.63)
 
         Controls.Label {
             anchors.fill: parent
-            anchors.leftMargin: card.compact ? 9 : 15
-            anchors.rightMargin: card.compact ? 9 : 15
+            anchors.leftMargin:
+                card.compact ? Tokens.padding.small : Tokens.padding.large
+            anchors.rightMargin:
+                card.compact ? Tokens.padding.small : Tokens.padding.large
             text: card.title
             color: "white"
-            font.pixelSize: card.compact ? 10 : 13
+            font: card.compact
+                ? Tokens.font.label.small
+                : Tokens.font.body.small
             elide: QQ.Text.ElideMiddle
             verticalAlignment: QQ.Text.AlignVCenter
         }

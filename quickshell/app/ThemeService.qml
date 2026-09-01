@@ -1,5 +1,6 @@
 import QtQuick as QQ
 import Quickshell.Io
+import Caelestia.Images
 
 QQ.Item {
     id: service
@@ -30,5 +31,20 @@ QQ.Item {
                 console.warn("Unable to read Caelestia scheme:", error)
             }
         }
+    }
+
+    FileView {
+        path: service.state.wallpaperStatePath
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: service.state.wallpaperPath = text().trim()
+        onLoadFailed: service.state.wallpaperPath = ""
+    }
+
+    ImageAnalyser {
+        source: service.state.wallpaperPath
+        onLuminanceChanged: service.state.wallLuminance = luminance
     }
 }

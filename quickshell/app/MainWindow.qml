@@ -2,6 +2,7 @@ import QtQuick as QQ
 import QtQuick.Controls as Controls
 import QtQuick.Layouts as Layouts
 import Quickshell
+import Caelestia.Config
 
 FloatingWindow {
     id: window
@@ -17,6 +18,11 @@ FloatingWindow {
     implicitWidth: 780
     implicitHeight: 650
     minimumSize: Qt.size(580, 480)
+    color: "transparent"
+
+    contentItem.Config.screen: screen ? screen.name : ""
+    contentItem.Tokens.screen: screen ? screen.name : ""
+
     QQ.Component.onCompleted: picker.window = window
 
     QQ.Rectangle {
@@ -25,6 +31,13 @@ FloatingWindow {
         color: window.state.surface
         onWidthChanged: window.picker.position()
         onHeightChanged: window.picker.position()
+
+        QQ.Behavior on color {
+            QQ.ColorAnimation {
+                duration: Tokens.anim.durations.expressiveSlowEffects
+                easing: Tokens.anim.expressiveSlowEffects
+            }
+        }
 
         QQ.Connections {
             target: mainScroll.contentItem
@@ -39,10 +52,19 @@ FloatingWindow {
         Layouts.ColumnLayout {
             anchors.fill: parent
             spacing: 0
+
             QQ.Rectangle {
                 Layouts.Layout.fillWidth: true
-                Layouts.Layout.preferredHeight: 12
+                Layouts.Layout.preferredHeight: Tokens.spacing.medium
                 color: window.state.surfaceContainer
+
+                QQ.Behavior on color {
+                    QQ.ColorAnimation {
+                        duration: Tokens.anim.durations.expressiveSlowEffects
+                        easing: Tokens.anim.expressiveSlowEffects
+                    }
+                }
+
                 QQ.MouseArea {
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
@@ -56,30 +78,35 @@ FloatingWindow {
                 Layouts.Layout.fillWidth: true
                 Layouts.Layout.fillHeight: true
                 clip: true
+
                 QQ.Item {
                     implicitWidth: window.width
-                    implicitHeight: content.implicitHeight + 40
+                    implicitHeight:
+                        content.implicitHeight + Tokens.padding.largeIncreased * 2
+
                     Layouts.ColumnLayout {
                         id: content
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        anchors.leftMargin: 20
-                        anchors.rightMargin: 20
-                        anchors.topMargin: 20
-                        spacing: 18
+                        anchors.leftMargin: Tokens.padding.largeIncreased
+                        anchors.rightMargin: Tokens.padding.largeIncreased
+                        anchors.topMargin: Tokens.padding.largeIncreased
+                        spacing: Tokens.spacing.large
 
                         TransferToolbar {
                             state: window.state
                             configService: window.configService
                             popupParent: themeLayer
                         }
+
                         WorkspaceOverview {
                             Layouts.Layout.fillWidth: true
                             state: window.state
                             picker: window.picker
                             configService: window.configService
                         }
+
                         PickerPanel {
                             id: pickerPanel
                             state: window.state
@@ -93,13 +120,15 @@ FloatingWindow {
 
         QQ.SequentialAnimation {
             id: themeSwapAnimation
+
             QQ.NumberAnimation {
                 target: themeLayer
                 property: "opacity"
                 to: 0.12
-                duration: 85
-                easing.type: QQ.Easing.InQuad
+                duration: Tokens.anim.durations.expressiveFastEffects
+                easing: Tokens.anim.expressiveFastEffects
             }
+
             QQ.ScriptAction {
                 script: {
                     if (window.state.pendingSchemeData !== null) {
@@ -108,12 +137,13 @@ FloatingWindow {
                     }
                 }
             }
+
             QQ.NumberAnimation {
                 target: themeLayer
                 property: "opacity"
                 to: 1
-                duration: 170
-                easing.type: QQ.Easing.OutCubic
+                duration: Tokens.anim.durations.expressiveDefaultEffects
+                easing: Tokens.anim.expressiveDefaultEffects
             }
         }
     }

@@ -1,6 +1,7 @@
 import QtQuick as QQ
 import Quickshell
 import Quickshell.Hyprland
+import Caelestia.Config
 import "PathUtils.js" as PathUtils
 
 QQ.QtObject {
@@ -11,6 +12,8 @@ QQ.QtObject {
         home + "/.config/caelestia/workspace-wallpapers.json"
     readonly property string schemePath:
         home + "/.local/state/caelestia/scheme.json"
+    readonly property string wallpaperStatePath:
+        home + "/.local/state/caelestia/wallpaper/path.txt"
     readonly property string helperPath:
         home + "/.config/caelestia/scripts/workspace-wallpaper-transfer"
     readonly property string applyPath:
@@ -28,6 +31,15 @@ QQ.QtObject {
     property string mediaError: ""
     property string transferStatus: ""
     property bool transferImporting: false
+    property string wallpaperPath: ""
+    property real wallLuminance: 0
+
+    readonly property bool light:
+        schemeData && String(schemeData.mode || "") === "light"
+
+    function clamp01(value) {
+        return Math.max(0, Math.min(1, Number(value) || 0))
+    }
 
     function colour(name, fallback) {
         if (schemeData && schemeData.colours &&
@@ -40,27 +52,97 @@ QQ.QtObject {
         return fallback
     }
 
-    readonly property var surface: colour("surface", "#18181d")
-    readonly property var surfaceContainer:
-        colour("surfaceContainer", "#202026")
-    readonly property var surfaceContainerLow:
-        colour("surfaceContainerLow", "#1d1d22")
-    readonly property var surfaceContainerHigh:
-        colour("surfaceContainerHigh", "#292930")
-    readonly property var surfaceContainerHighest:
-        colour("surfaceContainerHighest", "#33333b")
-    readonly property var textSurface: colour("onSurface", "#f1f1f4")
-    readonly property var textSurfaceVariant:
+    function rgb(value) {
+        let hex = String(value || "").replace("#", "")
+        if (hex.length === 3)
+            hex = hex.split("").map(character => character + character).join("")
+        if (hex.length !== 6)
+            return ({r: 0, g: 0, b: 0})
+
+        return ({
+            r: parseInt(hex.slice(0, 2), 16) / 255,
+            g: parseInt(hex.slice(2, 4), 16) / 255,
+            b: parseInt(hex.slice(4, 6), 16) / 255
+        })
+    }
+
+    function transparencyBase() {
+        const configured = GlobalConfig.appearance.transparency.base
+        return clamp01(configured - (light ? 0.1 : 0))
+    }
+
+    function transparencyLayers() {
+        return clamp01(GlobalConfig.appearance.transparency.layers)
+    }
+
+    function alterColour(value, alpha, layer) {
+        const channels = rgb(value)
+        const luminance = Math.sqrt(
+            0.299 * channels.r ** 2 +
+            0.587 * channels.g ** 2 +
+            0.114 * channels.b ** 2
+        )
+
+        if (luminance <= 0)
+            return Qt.rgba(channels.r, channels.g, channels.b, alpha)
+
+        const offset =
+            (!light || layer === 1 ? 1 : -layer / 2) *
+            (light ? 0.2 : 0.3) *
+            (1 - transparencyBase()) *
+            (1 + wallLuminance * (light ? (layer === 1 ? 3 : 1) : 2.5))
+        const scale = (luminance + offset) / luminance
+
+        return Qt.rgba(
+            clamp01(channels.r * scale),
+            clamp01(channels.g * scale),
+            clamp01(channels.b * scale),
+            alpha
+        )
+    }
+
+    function layerColour(name, fallback, layer) {
+        const value = colour(name, fallback)
+
+        if (!GlobalConfig.appearance.transparency.enabled)
+            return value
+
+        const level = layer === undefined ? 1 : Number(layer)
+        if (level === 0) {
+            const channels = rgb(value)
+            return Qt.rgba(
+                channels.r, channels.g, channels.b, transparencyBase()
+            )
+        }
+
+        return alterColour(value, transparencyLayers(), level)
+    }
+
+    readonly property color surface:
+        layerColour("surface", "#18181d", 0)
+    readonly property color surfaceContainer:
+        layerColour("surfaceContainer", "#202026", 1)
+    readonly property color surfaceContainerLow:
+        layerColour("surfaceContainerLow", "#1d1d22", 1)
+    readonly property color surfaceContainerHigh:
+        layerColour("surfaceContainerHigh", "#292930", 1)
+    readonly property color surfaceContainerHighest:
+        layerColour("surfaceContainerHighest", "#33333b", 1)
+    readonly property color textSurface: colour("onSurface", "#f1f1f4")
+    readonly property color textSurfaceVariant:
         colour("onSurfaceVariant", "#b9b9c1")
-    readonly property var outline: colour("outline", "#8e8e99")
-    readonly property var outlineVariant:
+    readonly property color outline: colour("outline", "#8e8e99")
+    readonly property color outlineVariant:
         colour("outlineVariant", "#3d3d46")
-    readonly property var primary: colour("primary", "#c9bfff")
-    readonly property var textPrimary: colour("onPrimary", "#211a4b")
-    readonly property var primaryContainer:
+    readonly property color primary: colour("primary", "#c9bfff")
+    readonly property color textPrimary: colour("onPrimary", "#211a4b")
+    readonly property color primaryContainer:
         colour("primaryContainer", "#48406f")
-    readonly property var textPrimaryContainer:
+    readonly property color textPrimaryContainer:
         colour("onPrimaryContainer", "#e7deff")
+    readonly property color error: colour("error", "#ffb4ab")
+    readonly property color textError: colour("onError", "#690005")
+    readonly property color scrim: colour("scrim", "#000000")
 
     function entryType(entry) {
         if (entry === undefined || entry === null || entry === "")

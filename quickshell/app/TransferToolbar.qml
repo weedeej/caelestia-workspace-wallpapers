@@ -2,6 +2,7 @@ import QtQuick as QQ
 import QtQuick.Controls as Controls
 import QtQuick.Dialogs as Dialogs
 import QtQuick.Layouts as Layouts
+import Caelestia.Config
 import "PathUtils.js" as PathUtils
 
 Layouts.RowLayout {
@@ -11,7 +12,7 @@ Layouts.RowLayout {
     required property var configService
     required property var popupParent
     Layouts.Layout.fillWidth: true
-    spacing: 8
+    spacing: Tokens.spacing.small
 
     function openExportJsonDialog() {
         const path = state.configPath
@@ -73,45 +74,51 @@ Layouts.RowLayout {
         Layouts.Layout.fillWidth: true
         text: toolbar.state.transferStatus
         color: toolbar.state.textSurfaceVariant
-        font.pixelSize: 11
+        font: Tokens.font.label.small
         elide: QQ.Text.ElideRight
     }
 
     QQ.Row {
         id: transferSplitButton
-        spacing: 3
+        spacing: Math.max(1, Math.round(Tokens.spacing.extraSmall / 2))
 
         QQ.Rectangle {
             width: 154
             height: 42
-            radius: 21
-            color:
-                !importJsonMouse.enabled
-                    ? Qt.alpha(toolbar.state.primary, 0.38)
-                    : importJsonMouse.pressed
-                        ? Qt.darker(toolbar.state.primary, 1.12)
-                        : importJsonMouse.containsMouse
-                            ? Qt.lighter(toolbar.state.primary, 1.06)
-                            : toolbar.state.primary
+            radius: height / 2 * Math.min(1, Tokens.rounding.scale)
+            color: importJsonMouse.enabled
+                ? toolbar.state.primary
+                : Qt.alpha(toolbar.state.textSurface, 0.10)
+
+            QQ.Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: Qt.alpha(
+                    toolbar.state.textPrimary,
+                    importJsonMouse.pressed
+                        ? 0.10
+                        : importJsonMouse.containsMouse ? 0.08 : 0
+                )
+            }
 
             Layouts.RowLayout {
                 anchors.centerIn: parent
-                spacing: 8
+                spacing: Tokens.spacing.small
+
                 Controls.Label {
                     text: "file_open"
                     color: importJsonMouse.enabled
                         ? toolbar.state.textPrimary
                         : Qt.alpha(toolbar.state.textSurface, 0.38)
-                    font.family: "Material Symbols Rounded"
-                    font.pixelSize: 19
+                    font: Tokens.font.icon.medium
                 }
+
                 Controls.Label {
                     text: "Import (JSON)"
                     color: importJsonMouse.enabled
                         ? toolbar.state.textPrimary
                         : Qt.alpha(toolbar.state.textSurface, 0.38)
-                    font.pixelSize: 13
-                    font.weight: 600
+                    font: Tokens.font.body.small
                 }
             }
 
@@ -127,21 +134,27 @@ Layouts.RowLayout {
                 Controls.ToolTip.text:
                     "Import only a workspace wallpapers config."
             }
-            QQ.Behavior on color { QQ.ColorAnimation { duration: 120 } }
         }
 
         QQ.Rectangle {
             width: 42
             height: 42
-            radius: 21
-            color:
-                !transferMenuMouse.enabled
-                    ? Qt.alpha(toolbar.state.primary, 0.38)
-                    : transferMenuMouse.pressed
-                        ? Qt.darker(toolbar.state.primary, 1.12)
+            radius: height / 2 * Math.min(1, Tokens.rounding.scale)
+            color: transferMenuMouse.enabled
+                ? toolbar.state.primary
+                : Qt.alpha(toolbar.state.textSurface, 0.10)
+
+            QQ.Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: Qt.alpha(
+                    toolbar.state.textPrimary,
+                    transferMenuMouse.pressed
+                        ? 0.10
                         : transferMenu.visible || transferMenuMouse.containsMouse
-                            ? Qt.lighter(toolbar.state.primary, 1.06)
-                            : toolbar.state.primary
+                            ? 0.08 : 0
+                )
+            }
 
             Controls.Label {
                 anchors.centerIn: parent
@@ -150,11 +163,14 @@ Layouts.RowLayout {
                 color: transferMenuMouse.enabled
                     ? toolbar.state.textPrimary
                     : Qt.alpha(toolbar.state.textSurface, 0.38)
-                font.family: "Material Symbols Rounded"
-                font.pixelSize: 21
+                font: Tokens.font.icon.medium
                 rotation: transferMenu.visible ? 180 : 0
+
                 QQ.Behavior on rotation {
-                    QQ.NumberAnimation { duration: 160 }
+                    QQ.NumberAnimation {
+                        duration: Tokens.anim.durations.expressiveFastEffects
+                        easing: Tokens.anim.expressiveFastEffects
+                    }
                 }
             }
 
@@ -172,10 +188,12 @@ Layouts.RowLayout {
                         return
                     }
                     const point = transferSplitButton.mapToItem(
-                        toolbar.popupParent, 0, transferSplitButton.height + 8
+                        toolbar.popupParent,
+                        0,
+                        transferSplitButton.height + Tokens.spacing.small
                     )
                     transferMenu.x = toolbar.popupParent.width -
-                        transferMenu.width - 20
+                        transferMenu.width - Tokens.padding.largeIncreased
                     transferMenu.y = point.y
                     transferMenu.open()
                 }
@@ -183,16 +201,17 @@ Layouts.RowLayout {
                 Controls.ToolTip.delay: 500
                 Controls.ToolTip.text: "More import and export actions."
             }
-            QQ.Behavior on color { QQ.ColorAnimation { duration: 120 } }
         }
     }
 
     Controls.Popup {
         id: transferMenu
         parent: toolbar.popupParent
-        x: toolbar.popupParent.width - width - 20
+        x: toolbar.popupParent.width - width - Tokens.padding.largeIncreased
         y: transferSplitButton.mapToItem(
-            toolbar.popupParent, 0, transferSplitButton.height + 8
+            toolbar.popupParent,
+            0,
+            transferSplitButton.height + Tokens.spacing.small
         ).y
         width: 350
         height: 210
@@ -200,8 +219,9 @@ Layouts.RowLayout {
         popupType: Controls.Popup.Item
         closePolicy: Controls.Popup.CloseOnEscape |
             Controls.Popup.CloseOnReleaseOutside
+
         background: QQ.Rectangle {
-            radius: 16
+            radius: Tokens.rounding.large
             color: toolbar.state.surfaceContainerLow
             border.width: 1
             border.color: toolbar.state.outlineVariant

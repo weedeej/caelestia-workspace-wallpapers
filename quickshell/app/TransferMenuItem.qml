@@ -1,6 +1,7 @@
 import QtQuick as QQ
 import QtQuick.Controls as Controls
 import QtQuick.Layouts as Layouts
+import Caelestia.Config
 
 Controls.MenuItem {
     id: item
@@ -12,20 +13,27 @@ Controls.MenuItem {
     required property var textColor
     required property var mutedTextColor
 
-    leftPadding: 12
-    rightPadding: 12
+    leftPadding: Tokens.padding.medium
+    rightPadding: Tokens.padding.medium
     hoverEnabled: true
 
     background: QQ.Rectangle {
-        radius: 11
+        radius: Tokens.rounding.medium
         color:
             item.highlighted || item.hovered
                 ? item.primaryContainerColor
                 : "transparent"
+
+        QQ.Behavior on color {
+            QQ.ColorAnimation {
+                duration: Tokens.anim.durations.expressiveSlowEffects
+                easing: Tokens.anim.expressiveSlowEffects
+            }
+        }
     }
 
     contentItem: Layouts.RowLayout {
-        spacing: 11
+        spacing: Tokens.spacing.medium
 
         Controls.Label {
             text: item.iconName
@@ -33,13 +41,12 @@ Controls.MenuItem {
                 item.highlighted || item.hovered
                     ? item.textPrimaryContainerColor
                     : item.mutedTextColor
-            font.family: "Material Symbols Rounded"
-            font.pixelSize: 19
+            font: Tokens.font.icon.medium
         }
 
         Layouts.ColumnLayout {
             Layouts.Layout.fillWidth: true
-            spacing: 2
+            spacing: Math.max(1, Math.round(Tokens.spacing.extraSmall / 2))
 
             Controls.Label {
                 Layouts.Layout.fillWidth: true
@@ -48,8 +55,7 @@ Controls.MenuItem {
                     item.highlighted || item.hovered
                         ? item.textPrimaryContainerColor
                         : item.textColor
-                font.pixelSize: 13
-                font.weight: 600
+                font: Tokens.font.label.medium
             }
 
             Controls.Label {
@@ -59,7 +65,7 @@ Controls.MenuItem {
                     item.highlighted || item.hovered
                         ? Qt.alpha(item.textPrimaryContainerColor, 0.78)
                         : item.mutedTextColor
-                font.pixelSize: 11
+                font: Tokens.font.label.small
                 elide: QQ.Text.ElideRight
             }
         }

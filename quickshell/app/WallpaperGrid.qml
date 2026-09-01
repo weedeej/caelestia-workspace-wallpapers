@@ -1,7 +1,7 @@
 import QtQuick as QQ
 import QtQuick.Controls as Controls
-
 import Quickshell.Widgets
+import Caelestia.Config
 import "PathUtils.js" as PathUtils
 
 Controls.ScrollView {
@@ -12,6 +12,7 @@ Controls.ScrollView {
     required property var backgroundColor
     required property var primaryContainerColor
     required property var textPrimaryContainerColor
+    required property var scrimColor
 
     signal itemSelected(var item)
 
@@ -35,8 +36,8 @@ Controls.ScrollView {
 
             ClippingRectangle {
                 anchors.fill: parent
-                anchors.margins: 5
-                radius: 10
+                anchors.margins: Tokens.padding.extraSmall
+                radius: Tokens.rounding.medium
                 opacity: grid.selectionEnabled ? 1 : 0.55
                 color: grid.backgroundColor
 
@@ -59,37 +60,20 @@ Controls.ScrollView {
 
                     QQ.Column {
                         anchors.centerIn: parent
-                        spacing: 6
+                        spacing: Tokens.spacing.extraSmall
 
-                        QQ.Rectangle {
+                        Controls.Label {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            width: 42
-                            height: 42
-                            radius: 9
+                            text: "casino"
                             color: grid.textPrimaryContainerColor
-
-                            QQ.Repeater {
-                                model: [[9, 9], [27, 9], [18, 18], [9, 27], [27, 27]]
-
-                                delegate: QQ.Rectangle {
-                                    required property var modelData
-
-                                    width: 6
-                                    height: 6
-                                    radius: 3
-                                    x: modelData[0]
-                                    y: modelData[1]
-                                    color: grid.primaryContainerColor
-                                }
-                            }
+                            font: Tokens.font.icon.large
                         }
 
                         Controls.Label {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: "Random"
                             color: grid.textPrimaryContainerColor
-                            font.bold: true
-                            font.pixelSize: 11
+                            font: Tokens.font.label.small
                         }
                     }
                 }
@@ -101,32 +85,32 @@ Controls.ScrollView {
                         (!modelData.thumbnail || modelData.thumbnail.length === 0)
                     width: 44
                     height: 44
-                    radius: 22
+                    radius: height / 2 * Math.min(1, Tokens.rounding.scale)
                     color: grid.primaryContainerColor
 
                     Controls.Label {
                         anchors.centerIn: parent
-                        text: "▶"
+                        text: "play_arrow"
                         color: grid.textPrimaryContainerColor
-                        font.pixelSize: 17
+                        font: Tokens.font.icon.medium
                     }
                 }
 
                 QQ.Rectangle {
                     anchors.top: parent.top
                     anchors.left: parent.left
-                    anchors.margins: 7
+                    anchors.margins: Tokens.padding.small
                     visible: modelData.type === "video"
                     width: 26
                     height: 26
-                    radius: 13
-                    color: Qt.rgba(0, 0, 0, 0.62)
+                    radius: height / 2 * Math.min(1, Tokens.rounding.scale)
+                    color: Qt.alpha(grid.scrimColor, 0.62)
 
                     Controls.Label {
                         anchors.centerIn: parent
-                        text: "▶"
+                        text: "play_arrow"
                         color: "white"
-                        font.pixelSize: 10
+                        font: Tokens.font.icon.small
                     }
                 }
 
@@ -136,15 +120,15 @@ Controls.ScrollView {
                     anchors.bottom: parent.bottom
                     visible: modelData.type !== "random"
                     height: 27
-                    color: Qt.rgba(0, 0, 0, 0.60)
+                    color: Qt.alpha(grid.scrimColor, 0.60)
 
                     Controls.Label {
                         anchors.fill: parent
-                        anchors.leftMargin: 7
-                        anchors.rightMargin: 7
+                        anchors.leftMargin: Tokens.padding.small
+                        anchors.rightMargin: Tokens.padding.small
                         text: PathUtils.basename(modelData.path)
                         color: "white"
-                        font.pixelSize: 10
+                        font: Tokens.font.label.small
                         elide: QQ.Text.ElideMiddle
                         verticalAlignment: QQ.Text.AlignVCenter
                     }

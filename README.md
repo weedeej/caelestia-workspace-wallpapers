@@ -32,6 +32,7 @@ You need:
 - `mpvpaper`
 - Python 3
 - `flock` and `setsid` (normally from `util-linux`)
+- `find` (normally from `findutils`)
 
 On Arch/CachyOS:
 
@@ -84,6 +85,9 @@ scripts/workspace-wallpaper-media
 
 scripts/workspace-wallpaper-transfer
   -> ~/.config/caelestia/scripts/workspace-wallpaper-transfer
+
+scripts/workspace_wallpaper_transfer_lib.py
+  -> ~/.config/caelestia/scripts/workspace_wallpaper_transfer_lib.py
 
 desktop/workspace-wallpapers.desktop
   -> ~/.local/share/applications/workspace-wallpapers.desktop

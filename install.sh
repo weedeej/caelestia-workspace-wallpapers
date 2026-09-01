@@ -10,7 +10,8 @@ CONFIG="$HOME/.config/caelestia/workspace-wallpapers.json"
 
 missing=()
 
-for command in qs caelestia jq python3 ffmpeg ffprobe hyprctl mpvpaper; do
+for command in qs caelestia jq python3 ffmpeg ffprobe hyprctl mpvpaper \
+    flock setsid find; do
     command -v "$command" >/dev/null 2>&1 ||
         missing+=("$command")
 done
@@ -34,8 +35,20 @@ install -m 0644 \
     "$ROOT/quickshell/shell.qml" \
     "$QS_DIR/shell.qml"
 
+shopt -s nullglob
+app_files=("$ROOT"/quickshell/app/*.qml "$ROOT"/quickshell/app/*.js)
+shopt -u nullglob
+
+if ((${#app_files[@]} == 0)); then
+    echo "No Quickshell application files found." >&2
+    exit 1
+fi
+
+# Keep the private application module identical to the installed version.
+rm -f -- "$QS_DIR/app/"*.qml "$QS_DIR/app/"*.js
+
 install -m 0644 \
-    "$ROOT"/quickshell/app/*.qml \
+    "${app_files[@]}" \
     "$QS_DIR/app/"
 
 install -m 0755 \

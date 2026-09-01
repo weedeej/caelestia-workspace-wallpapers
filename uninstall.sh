@@ -2,24 +2,8 @@
 set -euo pipefail
 
 rm -f "$HOME/.config/quickshell/workspace-wallpapers/shell.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/WorkspaceWallpapers.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/WallpaperCard.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/WallpaperGrid.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/VideoFrameEditor.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/AppState.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/ConfigService.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/LinkButton.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/MainWindow.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/MediaErrorCollector.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/MediaService.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/PickerController.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/PickerHeader.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/PickerPanel.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/ThemeService.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/TransferMenuItem.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/TransferToolbar.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/WorkspaceCombo.qml"
-rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/WorkspaceOverview.qml"
+rm -f -- "$HOME/.config/quickshell/workspace-wallpapers/app/"*.qml
+rm -f -- "$HOME/.config/quickshell/workspace-wallpapers/app/"*.js
 rmdir "$HOME/.config/quickshell/workspace-wallpapers/app" 2>/dev/null || true
 rmdir "$HOME/.config/quickshell/workspace-wallpapers" 2>/dev/null || true
 

@@ -3,7 +3,6 @@ import QtQuick.Controls as Controls
 import QtQuick.Dialogs as Dialogs
 import QtQuick.Layouts as Layouts
 import Caelestia.Config
-import "PathUtils.js" as PathUtils
 
 Layouts.RowLayout {
     id: toolbar
@@ -17,9 +16,9 @@ Layouts.RowLayout {
     function openExportJsonDialog() {
         const path = state.configPath
         const folder = path.slice(0, path.lastIndexOf("/"))
-        exportJsonDialog.currentFolder = PathUtils.fileUrl(folder)
-        exportJsonDialog.currentFile = PathUtils.fileUrl(path)
-        exportJsonDialog.selectedFile = PathUtils.fileUrl(path)
+        exportJsonDialog.currentFolder = toolbar.state.fileUrl(folder)
+        exportJsonDialog.currentFile = toolbar.state.fileUrl(path)
+        exportJsonDialog.selectedFile = toolbar.state.fileUrl(path)
         exportJsonDialog.open()
     }
 
@@ -27,7 +26,7 @@ Layouts.RowLayout {
         id: importJsonDialog
         title: "Import workspace wallpaper config"
         fileMode: Dialogs.FileDialog.OpenFile
-        currentFolder: PathUtils.fileUrl(toolbar.state.home)
+        currentFolder: toolbar.state.fileUrl(toolbar.state.home)
         nameFilters: ["JSON config (*.json)"]
         onAccepted: toolbar.configService.runTransfer("import-json", selectedFile)
     }
@@ -36,7 +35,7 @@ Layouts.RowLayout {
         id: importZipDialog
         title: "Import workspace wallpaper bundle"
         fileMode: Dialogs.FileDialog.OpenFile
-        currentFolder: PathUtils.fileUrl(toolbar.state.home)
+        currentFolder: toolbar.state.fileUrl(toolbar.state.home)
         nameFilters: ["ZIP bundle (*.zip)"]
         onAccepted: toolbar.configService.runTransfer("import-zip", selectedFile)
     }
@@ -45,13 +44,13 @@ Layouts.RowLayout {
         id: exportJsonDialog
         title: "Export workspace wallpaper config"
         fileMode: Dialogs.FileDialog.SaveFile
-        currentFolder: PathUtils.fileUrl(
+        currentFolder: toolbar.state.fileUrl(
             toolbar.state.configPath.slice(
                 0, toolbar.state.configPath.lastIndexOf("/")
             )
         )
-        currentFile: PathUtils.fileUrl(toolbar.state.configPath)
-        selectedFile: PathUtils.fileUrl(toolbar.state.configPath)
+        currentFile: toolbar.state.fileUrl(toolbar.state.configPath)
+        selectedFile: toolbar.state.fileUrl(toolbar.state.configPath)
         defaultSuffix: "json"
         nameFilters: ["JSON config (*.json)"]
         onAccepted: toolbar.configService.runTransfer("export-json", selectedFile)
@@ -61,8 +60,8 @@ Layouts.RowLayout {
         id: exportZipDialog
         title: "Export workspace wallpaper bundle"
         fileMode: Dialogs.FileDialog.SaveFile
-        currentFolder: PathUtils.fileUrl(toolbar.state.home)
-        selectedFile: PathUtils.fileUrl(
+        currentFolder: toolbar.state.fileUrl(toolbar.state.home)
+        selectedFile: toolbar.state.fileUrl(
             toolbar.state.home + "/workspace-wallpapers.zip"
         )
         defaultSuffix: "zip"

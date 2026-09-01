@@ -2,7 +2,6 @@ import QtQuick as QQ
 import QtQuick.Controls as Controls
 import QtQuick.Layouts as Layouts
 import Caelestia.Config
-import "PathUtils.js" as PathUtils
 
 Layouts.ColumnLayout {
     id: overview
@@ -22,7 +21,7 @@ Layouts.ColumnLayout {
         Layouts.Layout.fillWidth: true
         Layouts.Layout.preferredHeight: 180
         title: overview.state.entryName(overview.state.configData.default)
-        preview: PathUtils.fileUrl(
+        preview: overview.state.fileUrl(
             overview.state.entryPreview(overview.state.configData.default)
         )
         video: overview.state.isVideoEntry(overview.state.configData.default)
@@ -100,7 +99,7 @@ Layouts.ColumnLayout {
                         Layouts.Layout.fillHeight: true
                         compact: true
                         title: overview.state.entryName(workspaceCard.entry)
-                        preview: PathUtils.fileUrl(
+                        preview: overview.state.fileUrl(
                             overview.state.entryPreview(workspaceCard.entry)
                         )
                         video: overview.state.isVideoEntry(workspaceCard.entry)

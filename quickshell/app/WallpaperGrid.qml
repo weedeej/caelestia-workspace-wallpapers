@@ -2,11 +2,11 @@ import QtQuick as QQ
 import QtQuick.Controls as Controls
 import Quickshell.Widgets
 import Caelestia.Config
-import "PathUtils.js" as PathUtils
 
 Controls.ScrollView {
     id: grid
 
+    required property var state
     required property var items
     required property bool selectionEnabled
     required property var backgroundColor
@@ -47,7 +47,8 @@ Controls.ScrollView {
                         modelData.type !== "random" &&
                         modelData.thumbnail &&
                         modelData.thumbnail.length > 0
-                    source: visible ? PathUtils.fileUrl(modelData.thumbnail) : ""
+                    source: visible
+                        ? grid.state.fileUrl(modelData.thumbnail) : ""
                     fillMode: QQ.Image.PreserveAspectCrop
                     asynchronous: true
                     smooth: true
@@ -126,7 +127,7 @@ Controls.ScrollView {
                         anchors.fill: parent
                         anchors.leftMargin: Tokens.padding.small
                         anchors.rightMargin: Tokens.padding.small
-                        text: PathUtils.basename(modelData.path)
+                        text: grid.state.basename(modelData.path)
                         color: "white"
                         font: Tokens.font.label.small
                         elide: QQ.Text.ElideMiddle

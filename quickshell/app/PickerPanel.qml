@@ -140,6 +140,7 @@ PopupWindow {
                 visible: panel.picker.videoEditorOpen
                 Layouts.Layout.fillWidth: true
                 Layouts.Layout.preferredHeight: 180
+                state: panel.state
                 videoPath: panel.picker.selectedVideoPath
                 duration: panel.picker.selectedVideoDuration
                 frame: panel.picker.selectedVideoFrame
@@ -168,6 +169,7 @@ PopupWindow {
             WallpaperGrid {
                 Layouts.Layout.fillWidth: true
                 Layouts.Layout.fillHeight: true
+                state: panel.state
                 items: panel.state.pickerItems(panel.picker.pickingDefault)
                 selectionEnabled: !panel.picker.videoMatching &&
                     (panel.picker.pickingDefault ||

@@ -2,7 +2,6 @@ import QtQuick as QQ
 import Quickshell
 import Quickshell.Hyprland
 import Caelestia.Config
-import "PathUtils.js" as PathUtils
 
 QQ.QtObject {
     id: state
@@ -39,6 +38,18 @@ QQ.QtObject {
 
     function clamp01(value) {
         return Math.max(0, Math.min(1, Number(value) || 0))
+    }
+
+    function fileUrl(path) {
+        if (!path)
+            return ""
+        return "file://" +
+            encodeURIComponent(String(path)).replace(/%2F/gi, "/")
+    }
+
+    function basename(path) {
+        const parts = String(path || "").split("/")
+        return parts[parts.length - 1]
     }
 
     function colour(name, fallback) {
@@ -198,7 +209,7 @@ QQ.QtObject {
 
     function entryName(entry) {
         return entryType(entry) === "random"
-            ? "Random wallpaper" : PathUtils.basename(entryPath(entry))
+            ? "Random wallpaper" : basename(entryPath(entry))
     }
 
     function workspaceHasOverride(workspace) {

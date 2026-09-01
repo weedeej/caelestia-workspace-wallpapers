@@ -2,11 +2,11 @@ import QtQuick as QQ
 import QtQuick.Controls as Controls
 import QtQuick.Layouts as Layouts
 import Caelestia.Config
-import "PathUtils.js" as PathUtils
 
 QQ.Rectangle {
     id: editor
 
+    required property var state
     required property string videoPath
     required property real duration
     required property real frame
@@ -57,7 +57,7 @@ QQ.Rectangle {
 
             Controls.Label {
                 Layouts.Layout.fillWidth: true
-                text: PathUtils.basename(editor.videoPath)
+                text: editor.state.basename(editor.videoPath)
                 color: editor.textColor
                 font: Tokens.font.label.medium
                 elide: QQ.Text.ElideMiddle
@@ -199,7 +199,7 @@ QQ.Rectangle {
                     width: timeline.width / Math.max(1, editor.frames.length)
                     height: timeline.height
                     x: index * width
-                    source: PathUtils.fileUrl(modelData.path)
+                    source: editor.state.fileUrl(modelData.path)
                     fillMode: QQ.Image.PreserveAspectCrop
                     asynchronous: true
                     smooth: true

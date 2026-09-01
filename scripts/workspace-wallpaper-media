@@ -80,12 +80,20 @@ def video_size(path):
         fail(f"Video has no usable video stream: {path}")
     return int(streams[0]["width"]), int(streams[0]["height"])
 
-def extract_scaled(path, seconds, output, width):
-    if output.exists() and output.stat().st_size > 0:
-        return output
-
+def run_atomic_output(output, command):
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.stem + ".tmp" + output.suffix)
+    try:
+        run([*command, "-y", str(temp)])
+        temp.replace(output)
+    finally:
+        if temp.exists():
+            temp.unlink(missing_ok=True)
+    return output
+
+def extract_frame(path, seconds, output, quality, video_filter=None):
+    if output.exists() and output.stat().st_size > 0:
+        return output
 
     command = [
         "ffmpeg",
@@ -94,48 +102,17 @@ def extract_scaled(path, seconds, output, width):
         "-ss", f"{max(0.0, seconds):.3f}",
         "-i", str(path),
         "-frames:v", "1",
-        "-vf", f"scale={width}:-2",
-        "-q:v", "4",
-        "-y",
-        str(temp),
     ]
+    if video_filter:
+        command.extend(["-vf", video_filter])
+    command.extend(["-q:v", str(quality)])
+    return run_atomic_output(output, command)
 
-    try:
-        run(command)
-        temp.replace(output)
-    finally:
-        if temp.exists():
-            temp.unlink(missing_ok=True)
-
-    return output
+def extract_scaled(path, seconds, output, width):
+    return extract_frame(path, seconds, output, 4, f"scale={width}:-2")
 
 def extract_theme_frame(path, seconds, output):
-    if output.exists() and output.stat().st_size > 0:
-        return output
-
-    output.parent.mkdir(parents=True, exist_ok=True)
-    temp = output.with_name(output.stem + ".tmp" + output.suffix)
-
-    command = [
-        "ffmpeg",
-        "-hide_banner",
-        "-loglevel", "error",
-        "-ss", f"{max(0.0, seconds):.3f}",
-        "-i", str(path),
-        "-frames:v", "1",
-        "-q:v", "2",
-        "-y",
-        str(temp),
-    ]
-
-    try:
-        run(command)
-        temp.replace(output)
-    finally:
-        if temp.exists():
-            temp.unlink(missing_ok=True)
-
-    return output
+    return extract_frame(path, seconds, output, 2)
 
 def card_thumbnail(path, duration):
     directory = cache_dir(path)
@@ -253,7 +230,6 @@ def optimize(video, width, height):
         output = directory / f"matched-{width}x{height}.mp4"
 
         if not output.is_file() or output.stat().st_size == 0:
-            temp = output.with_name(output.stem + ".tmp" + output.suffix)
             filter_graph = (
                 f"scale={width}:{height}:force_original_aspect_ratio=increase,"
                 f"crop={width}:{height},setsar=1"
@@ -272,16 +248,8 @@ def optimize(video, width, height):
                 "-an",
                 "-map_metadata", "-1",
                 "-movflags", "+faststart",
-                "-y",
-                str(temp),
             ]
-
-            try:
-                run(command)
-                temp.replace(output)
-            finally:
-                if temp.exists():
-                    temp.unlink(missing_ok=True)
+            run_atomic_output(output, command)
 
     print(json.dumps({
         "path": str(output.resolve()),

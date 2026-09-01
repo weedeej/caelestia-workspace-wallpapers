@@ -2,6 +2,7 @@ import QtQuick as QQ
 import QtQuick.Controls as Controls
 
 import Quickshell.Widgets
+import "PathUtils.js" as PathUtils
 
 Controls.ScrollView {
     id: grid
@@ -13,17 +14,6 @@ Controls.ScrollView {
     required property var textPrimaryContainerColor
 
     signal itemSelected(var item)
-
-    function fileUrl(path) {
-        if (!path)
-            return ""
-        return "file://" + encodeURIComponent(String(path)).replace(/%2F/gi, "/")
-    }
-
-    function basename(path) {
-        const parts = String(path || "").split("/")
-        return parts[parts.length - 1]
-    }
 
     clip: true
 
@@ -56,7 +46,7 @@ Controls.ScrollView {
                         modelData.type !== "random" &&
                         modelData.thumbnail &&
                         modelData.thumbnail.length > 0
-                    source: visible ? grid.fileUrl(modelData.thumbnail) : ""
+                    source: visible ? PathUtils.fileUrl(modelData.thumbnail) : ""
                     fillMode: QQ.Image.PreserveAspectCrop
                     asynchronous: true
                     smooth: true
@@ -152,7 +142,7 @@ Controls.ScrollView {
                         anchors.fill: parent
                         anchors.leftMargin: 7
                         anchors.rightMargin: 7
-                        text: grid.basename(modelData.path)
+                        text: PathUtils.basename(modelData.path)
                         color: "white"
                         font.pixelSize: 10
                         elide: QQ.Text.ElideMiddle

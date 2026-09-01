@@ -1,0 +1,123 @@
+import QtQuick as QQ
+import QtQuick.Controls as Controls
+import QtQuick.Layouts as Layouts
+import "PathUtils.js" as PathUtils
+
+Layouts.ColumnLayout {
+    id: overview
+
+    required property var state
+    required property var picker
+    required property var configService
+    spacing: 18
+
+    Controls.Label {
+        text: "DEFAULT  (all non-custom use this)"
+        color: overview.state.textSurfaceVariant
+        font.pixelSize: 12
+        font.bold: true
+    }
+
+    WallpaperCard {
+        Layouts.Layout.fillWidth: true
+        Layouts.Layout.preferredHeight: 180
+        title: overview.state.entryName(overview.state.configData.default)
+        preview: PathUtils.fileUrl(
+            overview.state.entryPreview(overview.state.configData.default)
+        )
+        video: overview.state.isVideoEntry(overview.state.configData.default)
+        random: overview.state.isRandomEntry(overview.state.configData.default)
+        current: false
+        removable: false
+        backgroundColor: overview.state.surfaceContainerHigh
+        primaryColor: overview.state.primary
+        primaryContainerColor: overview.state.primaryContainer
+        textPrimaryContainerColor: overview.state.textPrimaryContainer
+        onEditRequested: function(anchorItem) {
+            overview.picker.openDefault(anchorItem)
+        }
+    }
+
+    Layouts.RowLayout {
+        Layouts.Layout.fillWidth: true
+        spacing: 8
+        Controls.Label {
+            text: "WORKSPACES"
+            color: overview.state.textSurfaceVariant
+            font.pixelSize: 12
+            font.bold: true
+        }
+        LinkButton {
+            id: addWorkspaceButton
+            text: "+ Add"
+            primaryColor: overview.state.primary
+            disabledTextColor: Qt.alpha(overview.state.textSurface, 0.38)
+            onClicked: overview.picker.beginAddWorkspace(addWorkspaceButton)
+        }
+        QQ.Item { Layouts.Layout.fillWidth: true }
+    }
+
+    QQ.Flow {
+        id: workspaceFlow
+        Layouts.Layout.fillWidth: true
+        spacing: 14
+        readonly property int columnCount: Math.max(
+            1, Math.floor((width + spacing) / (160 + spacing))
+        )
+        readonly property real cardWidth:
+            (width - (columnCount - 1) * spacing) / columnCount
+
+        QQ.Repeater {
+            model: overview.state.overrideWorkspaceIds()
+            delegate: QQ.Item {
+                id: workspaceCard
+                required property var modelData
+                property int workspace: Number(modelData)
+                property var entry: overview.state.workspaceEntry(workspace)
+                width: workspaceFlow.cardWidth
+                height: 138
+
+                Layouts.ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 6
+                    Controls.Label {
+                        text: "Workspace " + workspaceCard.workspace
+                        color: overview.state.textSurface
+                        font.pixelSize: 13
+                        font.bold: overview.state.isCurrentWorkspace(
+                            workspaceCard.workspace
+                        )
+                    }
+                    WallpaperCard {
+                        Layouts.Layout.fillWidth: true
+                        Layouts.Layout.fillHeight: true
+                        compact: true
+                        title: overview.state.entryName(workspaceCard.entry)
+                        preview: PathUtils.fileUrl(
+                            overview.state.entryPreview(workspaceCard.entry)
+                        )
+                        video: overview.state.isVideoEntry(workspaceCard.entry)
+                        random: overview.state.isRandomEntry(workspaceCard.entry)
+                        current: overview.state.isCurrentWorkspace(
+                            workspaceCard.workspace
+                        )
+                        removable: true
+                        backgroundColor: overview.state.surfaceContainerHigh
+                        primaryColor: overview.state.primary
+                        primaryContainerColor: overview.state.primaryContainer
+                        textPrimaryContainerColor:
+                            overview.state.textPrimaryContainer
+                        onEditRequested: function(anchorItem) {
+                            overview.picker.editWorkspace(
+                                workspaceCard.workspace, anchorItem
+                            )
+                        }
+                        onRemoveRequested: overview.configService.clearWorkspace(
+                            workspaceCard.workspace
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

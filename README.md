@@ -70,7 +70,7 @@ This installs:
 quickshell/shell.qml
   -> ~/.config/quickshell/workspace-wallpapers/shell.qml
 
-quickshell/app/*.qml
+quickshell/app/*.{qml,js}
   -> ~/.config/quickshell/workspace-wallpapers/app/
 
 scripts/workspace-wallpaper
@@ -188,16 +188,7 @@ The editor displays a draggable timeline spanning the duration of the video. The
 
 By default, a new thumbnail is generated every 5 seconds.
 
-The interval can be changed in the UI to:
-
-```text
-1s
-2s
-5s
-10s
-15s
-30s
-```
+The interval can be changed in the UI to 1s, 2s, 5s, 10s, 15s, or 30s.
 
 The selected timeline position is stored as `themeFrame` and is used as the reference image for Caelestia's adaptive colors.
 
@@ -223,11 +214,7 @@ Videos that are already no larger than the display are used directly.
 
 Video wallpapers are played with `mpvpaper`.
 
-The backend uses:
-
-```text
-loop-file=inf no-audio panscan=1.0
-```
+The backend uses `loop-file=inf no-audio panscan=1.0`.
 
 `panscan=1.0` gives wallpaper-style cover behavior. Videos are scaled to fill the display and excess width or height is cropped instead of leaving black bars.
 
@@ -249,11 +236,8 @@ Playback does not wait for the adaptive scheme update.
 
 ## Video cache
 
-Generated video thumbnails and theme-reference frames are cached under:
-
-```text
-~/.cache/caelestia-workspace-wallpapers/videos
-```
+Generated video thumbnails and theme-reference frames are cached under
+`~/.cache/caelestia-workspace-wallpapers/videos`.
 
 Resolution-matched H.264 copies are stored in the same source-keyed directory.
 They omit audio and preserve the source frame rate. A completed copy is reused

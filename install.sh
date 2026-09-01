@@ -34,7 +34,7 @@ install -m 0644 \
     "$ROOT/quickshell/shell.qml" \
     "$QS_DIR/shell.qml"
 
-for source in "$ROOT"/quickshell/app/*.qml; do
+for source in "$ROOT"/quickshell/app/*.qml "$ROOT"/quickshell/app/*.js; do
     install -m 0644 "$source" "$QS_DIR/app/${source##*/}"
 done
 
@@ -53,6 +53,10 @@ install -m 0755 \
 install -m 0755 \
     "$ROOT/scripts/workspace-wallpaper-transfer" \
     "$CAELESTIA_SCRIPTS/workspace-wallpaper-transfer"
+
+install -m 0644 \
+    "$ROOT/scripts/workspace_wallpaper_transfer_lib.py" \
+    "$CAELESTIA_SCRIPTS/workspace_wallpaper_transfer_lib.py"
 
 # Remove the pre-consolidation config helper when upgrading.
 rm -f "$CAELESTIA_SCRIPTS/workspace-wallpaper-config"

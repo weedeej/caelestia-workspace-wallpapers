@@ -1,6 +1,7 @@
 import QtQuick as QQ
 import QtQuick.Controls as Controls
 import QtQuick.Layouts as Layouts
+import "PathUtils.js" as PathUtils
 
 QQ.Rectangle {
     id: editor
@@ -23,17 +24,6 @@ QQ.Rectangle {
     signal intervalSelected(int interval)
     signal frameSelected(real frame)
     signal accepted()
-
-    function fileUrl(path) {
-        if (!path)
-            return ""
-        return "file://" + encodeURIComponent(String(path)).replace(/%2F/gi, "/")
-    }
-
-    function basename(path) {
-        const parts = String(path || "").split("/")
-        return parts[parts.length - 1]
-    }
 
     function formatTime(seconds) {
         const total = Math.max(0, Math.floor(Number(seconds) || 0))
@@ -63,7 +53,7 @@ QQ.Rectangle {
 
             Controls.Label {
                 Layouts.Layout.fillWidth: true
-                text: editor.basename(editor.videoPath)
+                text: PathUtils.basename(editor.videoPath)
                 color: editor.textColor
                 font.bold: true
                 elide: QQ.Text.ElideMiddle
@@ -123,7 +113,7 @@ QQ.Rectangle {
                     width: timeline.width / Math.max(1, editor.frames.length)
                     height: timeline.height
                     x: index * width
-                    source: editor.fileUrl(modelData.path)
+                    source: PathUtils.fileUrl(modelData.path)
                     fillMode: QQ.Image.PreserveAspectCrop
                     asynchronous: true
                     smooth: true

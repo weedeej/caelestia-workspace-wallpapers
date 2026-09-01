@@ -148,14 +148,6 @@ PopupWindow {
                 frames: panel.picker.timelineFrames
                 loading: panel.picker.timelineLoading
                 matching: panel.picker.videoMatching
-                surfaceColor: panel.state.surfaceContainerLow
-                trackColor: panel.state.surfaceContainerHigh
-                outlineColor: panel.state.outlineVariant
-                textColor: panel.state.textSurface
-                mutedTextColor: panel.state.textSurfaceVariant
-                primaryColor: panel.state.primary
-                textPrimaryColor: panel.state.textPrimary
-                scrimColor: panel.state.scrim
                 onIntervalSelected: function(value) {
                     panel.picker.selectedVideoInterval = value
                     panel.mediaService.loadTimeline()
@@ -174,10 +166,6 @@ PopupWindow {
                 selectionEnabled: !panel.picker.videoMatching &&
                     (panel.picker.pickingDefault ||
                         panel.picker.selectedWorkspace > 0)
-                backgroundColor: panel.state.surfaceContainerHigh
-                primaryContainerColor: panel.state.primaryContainer
-                textPrimaryContainerColor: panel.state.textPrimaryContainer
-                scrimColor: panel.state.scrim
                 onItemSelected: function(item) { panel.picker.handleItem(item) }
             }
         }

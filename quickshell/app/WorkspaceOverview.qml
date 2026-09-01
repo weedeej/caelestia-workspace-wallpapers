@@ -28,12 +28,7 @@ Layouts.ColumnLayout {
         random: overview.state.isRandomEntry(overview.state.configData.default)
         current: false
         removable: false
-        backgroundColor: overview.state.surfaceContainerHigh
-        primaryColor: overview.state.primary
-        primaryContainerColor: overview.state.primaryContainer
-        textPrimaryContainerColor: overview.state.textPrimaryContainer
-        errorColor: overview.state.error
-        scrimColor: overview.state.scrim
+        state: overview.state
         onEditRequested: function(anchorItem) {
             overview.picker.openDefault(anchorItem)
         }
@@ -52,8 +47,7 @@ Layouts.ColumnLayout {
         LinkButton {
             id: addWorkspaceButton
             text: "+ Add"
-            primaryColor: overview.state.primary
-            disabledTextColor: Qt.alpha(overview.state.textSurface, 0.38)
+            state: overview.state
             onClicked: overview.picker.beginAddWorkspace(addWorkspaceButton)
         }
 
@@ -108,12 +102,7 @@ Layouts.ColumnLayout {
                             workspaceCard.workspace
                         )
                         removable: true
-                        backgroundColor: overview.state.surfaceContainerHigh
-                        primaryColor: overview.state.primary
-                        primaryContainerColor: overview.state.primaryContainer
-                        textPrimaryContainerColor: overview.state.textPrimaryContainer
-                        errorColor: overview.state.error
-                        scrimColor: overview.state.scrim
+                        state: overview.state
                         onEditRequested: function(anchorItem) {
                             overview.picker.editWorkspace(
                                 workspaceCard.workspace, anchorItem

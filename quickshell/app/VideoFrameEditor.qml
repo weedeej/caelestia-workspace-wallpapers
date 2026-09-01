@@ -15,15 +15,6 @@ QQ.Rectangle {
     required property bool loading
     required property bool matching
 
-    required property var surfaceColor
-    required property var trackColor
-    required property var outlineColor
-    required property var textColor
-    required property var mutedTextColor
-    required property var primaryColor
-    required property var textPrimaryColor
-    required property var scrimColor
-
     signal intervalSelected(int interval)
     signal frameSelected(real frame)
     signal accepted()
@@ -42,9 +33,9 @@ QQ.Rectangle {
     }
 
     radius: Tokens.rounding.medium
-    color: surfaceColor
+    color: editor.state.surfaceContainerLow
     border.width: 1
-    border.color: outlineColor
+    border.color: editor.state.outlineVariant
 
     Layouts.ColumnLayout {
         anchors.fill: parent
@@ -58,20 +49,20 @@ QQ.Rectangle {
             Controls.Label {
                 Layouts.Layout.fillWidth: true
                 text: editor.state.basename(editor.videoPath)
-                color: editor.textColor
+                color: editor.state.textSurface
                 font: Tokens.font.label.medium
                 elide: QQ.Text.ElideMiddle
             }
 
             Controls.Label {
                 text: editor.formatTime(editor.duration)
-                color: editor.mutedTextColor
+                color: editor.state.textSurfaceVariant
                 font: Tokens.font.label.small
             }
 
             Controls.Label {
                 text: "Frames every"
-                color: editor.mutedTextColor
+                color: editor.state.textSurfaceVariant
                 font: Tokens.font.label.small
             }
 
@@ -92,7 +83,7 @@ QQ.Rectangle {
 
                 contentItem: Controls.Label {
                     text: intervalCombo.displayText
-                    color: editor.textColor
+                    color: editor.state.textSurface
                     font: Tokens.font.body.small
                     verticalAlignment: QQ.Text.AlignVCenter
                 }
@@ -101,7 +92,7 @@ QQ.Rectangle {
                     x: intervalCombo.width - width - Tokens.padding.small
                     y: (intervalCombo.height - height) / 2
                     text: "expand_more"
-                    color: editor.mutedTextColor
+                    color: editor.state.textSurfaceVariant
                     font: Tokens.font.icon.small
                     rotation: intervalCombo.popup.visible ? 180 : 0
 
@@ -116,10 +107,11 @@ QQ.Rectangle {
                 background: QQ.Rectangle {
                     radius: Tokens.rounding.medium
                     color: intervalCombo.pressed
-                        ? editor.surfaceColor : editor.trackColor
+                        ? editor.state.surfaceContainerLow
+                        : editor.state.surfaceContainerHigh
                     border.width: intervalCombo.popup.visible ? 2 : 1
                     border.color: intervalCombo.popup.visible
-                        ? editor.primaryColor : editor.outlineColor
+                        ? editor.state.primary : editor.state.outlineVariant
                 }
 
                 delegate: Controls.ItemDelegate {
@@ -134,13 +126,13 @@ QQ.Rectangle {
                     background: QQ.Rectangle {
                         radius: Tokens.rounding.small
                         color: intervalOption.highlighted
-                            ? Qt.alpha(editor.primaryColor, 0.16)
+                            ? Qt.alpha(editor.state.primary, 0.16)
                             : "transparent"
                     }
 
                     contentItem: Controls.Label {
                         text: String(intervalOption.modelData)
-                        color: editor.textColor
+                        color: editor.state.textSurface
                         font: Tokens.font.body.small
                         verticalAlignment: QQ.Text.AlignVCenter
                     }
@@ -164,9 +156,9 @@ QQ.Rectangle {
 
                     background: QQ.Rectangle {
                         radius: Tokens.rounding.medium
-                        color: editor.surfaceColor
+                        color: editor.state.surfaceContainerLow
                         border.width: 1
-                        border.color: editor.outlineColor
+                        border.color: editor.state.outlineVariant
                     }
                 }
 
@@ -176,7 +168,7 @@ QQ.Rectangle {
 
             Controls.Label {
                 text: "sec"
-                color: editor.mutedTextColor
+                color: editor.state.textSurfaceVariant
                 font: Tokens.font.label.small
             }
         }
@@ -188,7 +180,7 @@ QQ.Rectangle {
             Layouts.Layout.preferredHeight: 86
             radius: Tokens.rounding.small
             clip: true
-            color: editor.trackColor
+            color: editor.state.surfaceContainerHigh
 
             QQ.Repeater {
                 model: editor.frames
@@ -225,7 +217,7 @@ QQ.Rectangle {
                     y: 0
                     width: 3
                     height: parent.height
-                    color: editor.primaryColor
+                    color: editor.state.primary
 
                     QQ.Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -234,7 +226,7 @@ QQ.Rectangle {
                         width: 13
                         height: 13
                         radius: height / 2 * Math.min(1, Tokens.rounding.scale)
-                        color: editor.primaryColor
+                        color: editor.state.primary
                     }
                 }
 
@@ -244,7 +236,7 @@ QQ.Rectangle {
             QQ.Rectangle {
                 anchors.fill: parent
                 visible: editor.loading
-                color: Qt.alpha(editor.scrimColor, 0.42)
+                color: Qt.alpha(editor.state.scrim, 0.42)
 
                 Controls.Label {
                     anchors.centerIn: parent
@@ -261,7 +253,7 @@ QQ.Rectangle {
 
             Controls.Label {
                 text: "00:00"
-                color: editor.mutedTextColor
+                color: editor.state.textSurfaceVariant
                 font: Tokens.font.label.small
             }
 
@@ -269,7 +261,7 @@ QQ.Rectangle {
 
             Controls.Label {
                 text: "Theme frame  " + editor.formatTime(editor.frame)
-                color: editor.primaryColor
+                color: editor.state.primary
                 font: Tokens.font.label.medium
             }
 
@@ -277,7 +269,7 @@ QQ.Rectangle {
 
             Controls.Label {
                 text: editor.formatTime(editor.duration)
-                color: editor.mutedTextColor
+                color: editor.state.textSurfaceVariant
                 font: Tokens.font.label.small
             }
 
@@ -297,8 +289,8 @@ QQ.Rectangle {
                 contentItem: Controls.Label {
                     text: useVideoButton.text
                     color: useVideoButton.enabled
-                        ? editor.textPrimaryColor
-                        : Qt.alpha(editor.textColor, 0.38)
+                        ? editor.state.textPrimary
+                        : Qt.alpha(editor.state.textSurface, 0.38)
                     font: Tokens.font.body.small
                     horizontalAlignment: QQ.Text.AlignHCenter
                     verticalAlignment: QQ.Text.AlignVCenter
@@ -308,14 +300,14 @@ QQ.Rectangle {
                     radius: useVideoButton.height / 2 *
                         Math.min(1, Tokens.rounding.scale)
                     color: useVideoButton.enabled
-                        ? editor.primaryColor
-                        : Qt.alpha(editor.textColor, 0.10)
+                        ? editor.state.primary
+                        : Qt.alpha(editor.state.textSurface, 0.10)
 
                     QQ.Rectangle {
                         anchors.fill: parent
                         radius: parent.radius
                         color: Qt.alpha(
-                            editor.textPrimaryColor,
+                            editor.state.textPrimary,
                             useVideoButton.down
                                 ? 0.10
                                 : useVideoButton.hovered ? 0.08 : 0
@@ -333,7 +325,7 @@ QQ.Rectangle {
         visible: editor.matching
         z: 2
         radius: editor.radius
-        color: Qt.alpha(editor.surfaceColor, 0.94)
+        color: Qt.alpha(editor.state.surfaceContainerLow, 0.94)
 
         QQ.Column {
             anchors.centerIn: parent
@@ -342,7 +334,7 @@ QQ.Rectangle {
             Controls.Label {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "progress_activity"
-                color: editor.primaryColor
+                color: editor.state.primary
                 font: Tokens.font.icon.large
 
                 QQ.RotationAnimator on rotation {
@@ -357,7 +349,7 @@ QQ.Rectangle {
             Controls.Label {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "Matching your resolution…"
-                color: editor.textColor
+                color: editor.state.textSurface
                 font: Tokens.font.label.medium
             }
         }

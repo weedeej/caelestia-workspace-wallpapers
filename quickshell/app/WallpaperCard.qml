@@ -14,12 +14,7 @@ ClippingRectangle {
     required property bool current
     required property bool removable
 
-    required property var backgroundColor
-    required property var primaryColor
-    required property var primaryContainerColor
-    required property var textPrimaryContainerColor
-    required property var errorColor
-    required property var scrimColor
+    required property var state
 
     property bool compact: false
 
@@ -27,9 +22,9 @@ ClippingRectangle {
     signal removeRequested()
 
     radius: compact ? Tokens.rounding.medium : Tokens.rounding.large
-    color: backgroundColor
+    color: card.state.surfaceContainerHigh
     border.width: current ? 2 : 0
-    border.color: primaryColor
+    border.color: card.state.primary
 
     QQ.Behavior on color {
         QQ.ColorAnimation {
@@ -50,12 +45,12 @@ ClippingRectangle {
     QQ.Rectangle {
         anchors.fill: parent
         visible: card.random
-        color: card.primaryContainerColor
+        color: card.state.primaryContainer
 
         Controls.Label {
             anchors.centerIn: parent
             text: "casino"
-            color: card.textPrimaryContainerColor
+            color: card.state.textPrimaryContainer
             font: card.compact
                 ? Tokens.font.icon.large
                 : Tokens.font.icon.extraLarge
@@ -68,12 +63,12 @@ ClippingRectangle {
         width: card.compact ? 46 : 64
         height: width
         radius: height / 2 * Math.min(1, Tokens.rounding.scale)
-        color: card.primaryContainerColor
+        color: card.state.primaryContainer
 
         Controls.Label {
             anchors.centerIn: parent
             text: "play_arrow"
-            color: card.textPrimaryContainerColor
+            color: card.state.textPrimaryContainer
             font: card.compact
                 ? Tokens.font.icon.medium
                 : Tokens.font.icon.large
@@ -89,7 +84,7 @@ ClippingRectangle {
         implicitWidth: badgeRow.implicitWidth + Tokens.padding.small * 2
         height: 24
         radius: height / 2 * Math.min(1, Tokens.rounding.scale)
-        color: Qt.alpha(card.scrimColor, 0.62)
+        color: Qt.alpha(card.state.scrim, 0.62)
 
         Layouts.RowLayout {
             id: badgeRow
@@ -117,7 +112,7 @@ ClippingRectangle {
         anchors.fill: parent
         anchors.bottomMargin: card.compact ? 36 : 52
         visible: hover.hovered
-        color: Qt.alpha(card.scrimColor, card.compact ? 0.34 : 0.26)
+        color: Qt.alpha(card.state.scrim, card.compact ? 0.34 : 0.26)
 
         QQ.Rectangle {
             id: editButton
@@ -128,12 +123,12 @@ ClippingRectangle {
             width: card.compact ? 38 : 42
             height: width
             radius: height / 2 * Math.min(1, Tokens.rounding.scale)
-            color: card.primaryContainerColor
+            color: card.state.primaryContainer
 
             Controls.Label {
                 anchors.centerIn: parent
                 text: "edit"
-                color: card.textPrimaryContainerColor
+                color: card.state.textPrimaryContainer
                 font: Tokens.font.icon.medium
             }
 
@@ -152,12 +147,12 @@ ClippingRectangle {
             width: 38
             height: width
             radius: height / 2 * Math.min(1, Tokens.rounding.scale)
-            color: Qt.alpha(card.scrimColor, 0.34)
+            color: Qt.alpha(card.state.scrim, 0.34)
 
             Controls.Label {
                 anchors.centerIn: parent
                 text: "delete"
-                color: card.errorColor
+                color: card.state.error
                 font: Tokens.font.icon.medium
             }
 
@@ -174,7 +169,7 @@ ClippingRectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: card.compact ? 36 : 52
-        color: Qt.alpha(card.scrimColor, 0.63)
+        color: Qt.alpha(card.state.scrim, 0.63)
 
         Controls.Label {
             anchors.fill: parent

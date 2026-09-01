@@ -231,10 +231,7 @@ Layouts.RowLayout {
             iconName: "folder_zip"
             description: "Import config, images, and videos from a ZIP bundle."
             x: 6; y: 6; width: transferMenu.width - 12; height: 66
-            primaryContainerColor: toolbar.state.primaryContainer
-            textPrimaryContainerColor: toolbar.state.textPrimaryContainer
-            textColor: toolbar.state.textSurface
-            mutedTextColor: toolbar.state.textSurfaceVariant
+            state: toolbar.state
             onClicked: { transferMenu.close(); importZipDialog.open() }
         }
         TransferMenuItem {
@@ -242,10 +239,7 @@ Layouts.RowLayout {
             iconName: "data_object"
             description: "Export only the config."
             x: 6; y: 72; width: transferMenu.width - 12; height: 66
-            primaryContainerColor: toolbar.state.primaryContainer
-            textPrimaryContainerColor: toolbar.state.textPrimaryContainer
-            textColor: toolbar.state.textSurface
-            mutedTextColor: toolbar.state.textSurfaceVariant
+            state: toolbar.state
             onClicked: { transferMenu.close(); toolbar.openExportJsonDialog() }
         }
         TransferMenuItem {
@@ -253,10 +247,7 @@ Layouts.RowLayout {
             iconName: "archive"
             description: "Export config with all media assets in use."
             x: 6; y: 138; width: transferMenu.width - 12; height: 66
-            primaryContainerColor: toolbar.state.primaryContainer
-            textPrimaryContainerColor: toolbar.state.textPrimaryContainer
-            textColor: toolbar.state.textSurface
-            mutedTextColor: toolbar.state.textSurfaceVariant
+            state: toolbar.state
             onClicked: { transferMenu.close(); exportZipDialog.open() }
         }
     }

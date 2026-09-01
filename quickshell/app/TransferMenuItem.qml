@@ -8,10 +8,7 @@ Controls.MenuItem {
 
     required property string iconName
     required property string description
-    required property var primaryContainerColor
-    required property var textPrimaryContainerColor
-    required property var textColor
-    required property var mutedTextColor
+    required property var state
 
     leftPadding: Tokens.padding.medium
     rightPadding: Tokens.padding.medium
@@ -21,7 +18,7 @@ Controls.MenuItem {
         radius: Tokens.rounding.medium
         color:
             item.highlighted || item.hovered
-                ? item.primaryContainerColor
+                ? item.state.primaryContainer
                 : "transparent"
 
         QQ.Behavior on color {
@@ -39,8 +36,8 @@ Controls.MenuItem {
             text: item.iconName
             color:
                 item.highlighted || item.hovered
-                    ? item.textPrimaryContainerColor
-                    : item.mutedTextColor
+                    ? item.state.textPrimaryContainer
+                    : item.state.textSurfaceVariant
             font: Tokens.font.icon.medium
         }
 
@@ -53,8 +50,8 @@ Controls.MenuItem {
                 text: item.text
                 color:
                     item.highlighted || item.hovered
-                        ? item.textPrimaryContainerColor
-                        : item.textColor
+                        ? item.state.textPrimaryContainer
+                        : item.state.textSurface
                 font: Tokens.font.label.medium
             }
 
@@ -63,8 +60,8 @@ Controls.MenuItem {
                 text: item.description
                 color:
                     item.highlighted || item.hovered
-                        ? Qt.alpha(item.textPrimaryContainerColor, 0.78)
-                        : item.mutedTextColor
+                        ? Qt.alpha(item.state.textPrimaryContainer, 0.78)
+                        : item.state.textSurfaceVariant
                 font: Tokens.font.label.small
                 elide: QQ.Text.ElideRight
             }

@@ -9,10 +9,6 @@ Controls.ScrollView {
     required property var state
     required property var items
     required property bool selectionEnabled
-    required property var backgroundColor
-    required property var primaryContainerColor
-    required property var textPrimaryContainerColor
-    required property var scrimColor
 
     signal itemSelected(var item)
 
@@ -39,7 +35,7 @@ Controls.ScrollView {
                 anchors.margins: Tokens.padding.extraSmall
                 radius: Tokens.rounding.medium
                 opacity: grid.selectionEnabled ? 1 : 0.55
-                color: grid.backgroundColor
+                color: grid.state.surfaceContainerHigh
 
                 QQ.Image {
                     anchors.fill: parent
@@ -57,7 +53,7 @@ Controls.ScrollView {
                 QQ.Rectangle {
                     anchors.fill: parent
                     visible: modelData.type === "random"
-                    color: grid.primaryContainerColor
+                    color: grid.state.primaryContainer
 
                     QQ.Column {
                         anchors.centerIn: parent
@@ -66,14 +62,14 @@ Controls.ScrollView {
                         Controls.Label {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: "casino"
-                            color: grid.textPrimaryContainerColor
+                            color: grid.state.textPrimaryContainer
                             font: Tokens.font.icon.large
                         }
 
                         Controls.Label {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: "Random"
-                            color: grid.textPrimaryContainerColor
+                            color: grid.state.textPrimaryContainer
                             font: Tokens.font.label.small
                         }
                     }
@@ -87,12 +83,12 @@ Controls.ScrollView {
                     width: 44
                     height: 44
                     radius: height / 2 * Math.min(1, Tokens.rounding.scale)
-                    color: grid.primaryContainerColor
+                    color: grid.state.primaryContainer
 
                     Controls.Label {
                         anchors.centerIn: parent
                         text: "play_arrow"
-                        color: grid.textPrimaryContainerColor
+                        color: grid.state.textPrimaryContainer
                         font: Tokens.font.icon.medium
                     }
                 }
@@ -105,7 +101,7 @@ Controls.ScrollView {
                     width: 26
                     height: 26
                     radius: height / 2 * Math.min(1, Tokens.rounding.scale)
-                    color: Qt.alpha(grid.scrimColor, 0.62)
+                    color: Qt.alpha(grid.state.scrim, 0.62)
 
                     Controls.Label {
                         anchors.centerIn: parent
@@ -121,7 +117,7 @@ Controls.ScrollView {
                     anchors.bottom: parent.bottom
                     visible: modelData.type !== "random"
                     height: 27
-                    color: Qt.alpha(grid.scrimColor, 0.60)
+                    color: Qt.alpha(grid.state.scrim, 0.60)
 
                     Controls.Label {
                         anchors.fill: parent

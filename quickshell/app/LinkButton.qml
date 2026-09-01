@@ -5,8 +5,7 @@ import Caelestia.Config
 Controls.Button {
     id: button
 
-    required property var primaryColor
-    required property var disabledTextColor
+    required property var state
 
     flat: true
     hoverEnabled: true
@@ -19,7 +18,9 @@ Controls.Button {
 
     contentItem: Controls.Label {
         text: button.text
-        color: button.enabled ? button.primaryColor : button.disabledTextColor
+        color: button.enabled
+            ? button.state.primary
+            : Qt.alpha(button.state.textSurface, 0.38)
         font: Tokens.font.body.small
         horizontalAlignment: QQ.Text.AlignHCenter
         verticalAlignment: QQ.Text.AlignVCenter
@@ -28,7 +29,7 @@ Controls.Button {
     background: QQ.Rectangle {
         radius: button.height / 2 * Math.min(1, Tokens.rounding.scale)
         color: Qt.alpha(
-            button.primaryColor,
+            button.state.primary,
             button.down ? 0.10 : button.hovered ? 0.08 : 0
         )
 

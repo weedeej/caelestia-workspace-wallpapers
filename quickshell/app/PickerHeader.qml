@@ -57,16 +57,14 @@ Layouts.RowLayout {
     LinkButton {
         text: "Refresh"
         enabled: !header.picker.videoMatching
-        primaryColor: header.state.primary
-        disabledTextColor: Qt.alpha(header.state.textSurface, 0.38)
+        state: header.state
         onClicked: header.mediaService.rescan()
     }
 
     LinkButton {
         text: "Cancel"
         enabled: !header.picker.videoMatching
-        primaryColor: header.state.primary
-        disabledTextColor: Qt.alpha(header.state.textSurface, 0.38)
+        state: header.state
         onClicked: header.picker.close()
     }
 }

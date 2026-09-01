@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Import and export workspace-wallpaper configurations and bundles."""
+"""Manage workspace-wallpaper configuration and portable bundles."""
 
 from __future__ import annotations
 
 import argparse
 import copy
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -252,20 +253,122 @@ def import_json(source: Path) -> None:
     print(f"Imported config from {source}")
 
 
+def config_or_default() -> dict[str, Any]:
+    if CONFIG.is_file():
+        return read_config(CONFIG)
+    return {"default": "", "workspaces": {}}
+
+
+def require_file(raw_path: str, label: str) -> str:
+    path = Path(raw_path).expanduser()
+    if not path.is_file():
+        raise ValueError(f"{label} does not exist: {path}")
+    return str(path.resolve())
+
+
+def nonnegative_number(raw_value: str, label: str) -> float:
+    try:
+        value = float(raw_value)
+    except ValueError as error:
+        raise ValueError(f"{label} must be a non-negative number.") from error
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{label} must be a non-negative number.")
+    return value
+
+
+def set_default(arguments: list[str]) -> None:
+    if len(arguments) != 1:
+        raise ValueError("set-default requires an image path.")
+    config = config_or_default()
+    config["default"] = require_file(arguments[0], "Wallpaper")
+    write_json_atomic(CONFIG, config)
+
+
+def set_workspace(arguments: list[str]) -> None:
+    if len(arguments) != 2 or not arguments[0]:
+        raise ValueError("set requires a workspace and an image path.")
+    workspace, raw_path = arguments
+    path = raw_path if raw_path == RANDOM_VALUE else require_file(raw_path, "Wallpaper")
+    config = config_or_default()
+    config["workspaces"][workspace] = path
+    write_json_atomic(CONFIG, config)
+
+
+def video_entry(
+    arguments: list[str], *, include_workspace: bool
+) -> tuple[str | None, dict[str, Any]]:
+    expected = 4 if include_workspace else 3
+    if len(arguments) != expected:
+        command = "set-video" if include_workspace else "set-video-default"
+        raise ValueError(f"{command} requires a video path, frame, and interval.")
+
+    offset = 1 if include_workspace else 0
+    workspace = arguments[0] if include_workspace else None
+    if include_workspace and not workspace:
+        raise ValueError("set-video requires a workspace.")
+
+    path = require_file(arguments[offset], "Video")
+    frame = nonnegative_number(arguments[offset + 1], "Frame")
+    interval = nonnegative_number(arguments[offset + 2], "Interval")
+    return workspace, {
+        "type": "video",
+        "path": path,
+        "themeFrame": frame,
+        "interval": interval,
+    }
+
+
+def set_video_default(arguments: list[str]) -> None:
+    _, entry = video_entry(arguments, include_workspace=False)
+    config = config_or_default()
+    config["default"] = entry
+    write_json_atomic(CONFIG, config)
+
+
+def set_video_workspace(arguments: list[str]) -> None:
+    workspace, entry = video_entry(arguments, include_workspace=True)
+    config = config_or_default()
+    config["workspaces"][workspace] = entry
+    write_json_atomic(CONFIG, config)
+
+
+def clear_workspace(arguments: list[str]) -> None:
+    if len(arguments) != 1 or not arguments[0]:
+        raise ValueError("clear requires a workspace.")
+    config = config_or_default()
+    config["workspaces"].pop(arguments[0], None)
+    write_json_atomic(CONFIG, config)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("import-json", "import-zip", "export-json", "export-zip"))
-    parser.add_argument("path", type=Path)
+    parser.add_argument("command", choices=(
+        "set-default", "set", "set-video-default", "set-video", "clear",
+        "import-json", "import-zip", "export-json", "export-zip",
+    ))
+    parser.add_argument("arguments", nargs="*")
     arguments = parser.parse_args()
 
-    actions = {
+    transfer_actions = {
         "import-json": import_json,
         "import-zip": import_zip,
         "export-json": export_json,
         "export-zip": export_zip,
     }
+    mutation_actions = {
+        "set-default": set_default,
+        "set": set_workspace,
+        "set-video-default": set_video_default,
+        "set-video": set_video_workspace,
+        "clear": clear_workspace,
+    }
     try:
-        actions[arguments.command](arguments.path.expanduser())
+        if arguments.command in transfer_actions:
+            if len(arguments.arguments) != 1:
+                raise ValueError(f"{arguments.command} requires a path.")
+            transfer_actions[arguments.command](Path(arguments.arguments[0]).expanduser())
+        else:
+            mutation_actions[arguments.command](arguments.arguments)
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         parser.exit(1, f"{error}\n")
 

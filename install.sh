@@ -23,6 +23,7 @@ fi
 
 mkdir -p \
     "$QS_DIR" \
+    "$QS_DIR/app" \
     "$CAELESTIA_SCRIPTS" \
     "$APP_DIR" \
     "$HOME/Pictures/Wallpapers" \
@@ -33,13 +34,13 @@ install -m 0644 \
     "$ROOT/quickshell/shell.qml" \
     "$QS_DIR/shell.qml"
 
+for source in "$ROOT"/quickshell/app/*.qml; do
+    install -m 0644 "$source" "$QS_DIR/app/${source##*/}"
+done
+
 install -m 0755 \
     "$ROOT/scripts/workspace-wallpaper" \
     "$CAELESTIA_SCRIPTS/workspace-wallpaper"
-
-install -m 0755 \
-    "$ROOT/scripts/workspace-wallpaper-config" \
-    "$CAELESTIA_SCRIPTS/workspace-wallpaper-config"
 
 install -m 0755 \
     "$ROOT/scripts/workspace-wallpaper-media" \
@@ -48,6 +49,9 @@ install -m 0755 \
 install -m 0755 \
     "$ROOT/scripts/workspace-wallpaper-transfer" \
     "$CAELESTIA_SCRIPTS/workspace-wallpaper-transfer"
+
+# Remove the pre-consolidation config helper when upgrading.
+rm -f "$CAELESTIA_SCRIPTS/workspace-wallpaper-config"
 
 install -m 0644 \
     "$ROOT/desktop/workspace-wallpapers.desktop" \

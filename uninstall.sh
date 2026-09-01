@@ -2,11 +2,17 @@
 set -euo pipefail
 
 rm -f "$HOME/.config/quickshell/workspace-wallpapers/shell.qml"
+rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/WorkspaceWallpapers.qml"
+rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/WallpaperCard.qml"
+rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/WallpaperGrid.qml"
+rm -f "$HOME/.config/quickshell/workspace-wallpapers/app/VideoFrameEditor.qml"
+rmdir "$HOME/.config/quickshell/workspace-wallpapers/app" 2>/dev/null || true
 rmdir "$HOME/.config/quickshell/workspace-wallpapers" 2>/dev/null || true
 
 rm -f "$HOME/.config/caelestia/scripts/workspace-wallpaper"
 rm -f "$HOME/.config/caelestia/scripts/workspace-wallpaper-config"
 rm -f "$HOME/.config/caelestia/scripts/workspace-wallpaper-media"
+rm -f "$HOME/.config/caelestia/scripts/workspace-wallpaper-transfer"
 
 rm -f "$HOME/.local/share/applications/workspace-wallpapers.desktop"
 

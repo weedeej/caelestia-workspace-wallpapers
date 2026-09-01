@@ -69,11 +69,11 @@ This installs:
 quickshell/shell.qml
   -> ~/.config/quickshell/workspace-wallpapers/shell.qml
 
+quickshell/app/*.qml
+  -> ~/.config/quickshell/workspace-wallpapers/app/
+
 scripts/workspace-wallpaper
   -> ~/.config/caelestia/scripts/workspace-wallpaper
-
-scripts/workspace-wallpaper-config
-  -> ~/.config/caelestia/scripts/workspace-wallpaper-config
 
 scripts/workspace-wallpaper-media
   -> ~/.config/caelestia/scripts/workspace-wallpaper-media
@@ -84,6 +84,12 @@ scripts/workspace-wallpaper-transfer
 desktop/workspace-wallpapers.desktop
   -> ~/.local/share/applications/workspace-wallpapers.desktop
 ```
+
+`workspace-wallpaper-transfer` is the single configuration CLI used for
+wallpaper assignment, import, and export operations.
+
+`shell.qml` is only the Quickshell entry point. The application implementation
+and reusable controls live in its private `app/` directory.
 
 Your config lives at:
 

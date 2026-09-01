@@ -79,6 +79,7 @@ def set_entry_path(entry: Any, path: str) -> Any:
         return path
     updated = copy.deepcopy(entry)
     updated["path"] = path
+    updated.pop("optimized", None)
     return updated
 
 
@@ -297,8 +298,9 @@ def set_workspace(arguments: list[str]) -> None:
 def video_entry(
     arguments: list[str], *, include_workspace: bool
 ) -> tuple[str | None, dict[str, Any]]:
-    expected = 4 if include_workspace else 3
-    if len(arguments) != expected:
+    minimum = 4 if include_workspace else 3
+    maximum = minimum + 3
+    if len(arguments) not in (minimum, maximum):
         command = "set-video" if include_workspace else "set-video-default"
         raise ValueError(f"{command} requires a video path, frame, and interval.")
 
@@ -310,12 +312,26 @@ def video_entry(
     path = require_file(arguments[offset], "Video")
     frame = nonnegative_number(arguments[offset + 1], "Frame")
     interval = nonnegative_number(arguments[offset + 2], "Interval")
-    return workspace, {
+    entry = {
         "type": "video",
         "path": path,
         "themeFrame": frame,
         "interval": interval,
     }
+
+    if len(arguments) == maximum:
+        optimized_path = require_file(arguments[offset + 3], "Optimized video")
+        optimized_width = int(nonnegative_number(arguments[offset + 4], "Width"))
+        optimized_height = int(nonnegative_number(arguments[offset + 5], "Height"))
+        if optimized_width <= 0 or optimized_height <= 0:
+            raise ValueError("Optimized video dimensions must be positive.")
+        entry["optimized"] = {
+            "path": optimized_path,
+            "width": optimized_width,
+            "height": optimized_height,
+        }
+
+    return workspace, entry
 
 
 def set_video_default(arguments: list[str]) -> None:

@@ -43,6 +43,10 @@ install -m 0755 \
     "$CAELESTIA_SCRIPTS/workspace-wallpaper"
 
 install -m 0755 \
+    "$ROOT/scripts/workspace-wallpaper-ipc" \
+    "$CAELESTIA_SCRIPTS/workspace-wallpaper-ipc"
+
+install -m 0755 \
     "$ROOT/scripts/workspace-wallpaper-media" \
     "$CAELESTIA_SCRIPTS/workspace-wallpaper-media"
 

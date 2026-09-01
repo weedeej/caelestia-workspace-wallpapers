@@ -11,6 +11,7 @@ QQ.Rectangle {
     required property int interval
     required property var frames
     required property bool loading
+    required property bool matching
 
     required property var surfaceColor
     required property var trackColor
@@ -83,7 +84,7 @@ QQ.Rectangle {
             Controls.ComboBox {
                 id: intervalCombo
 
-                enabled: !editor.loading
+                enabled: !editor.loading && !editor.matching
                 Layouts.Layout.preferredWidth: 84
                 model: [1, 2, 5, 10, 15, 30]
                 currentIndex: {
@@ -133,7 +134,8 @@ QQ.Rectangle {
                 id: timelineSlider
 
                 anchors.fill: parent
-                enabled: !editor.loading && editor.duration > 0
+                enabled:
+                    !editor.loading && !editor.matching && editor.duration > 0
                 from: 0
                 to: Math.max(0, editor.duration)
                 value: Math.min(editor.frame, to)
@@ -211,9 +213,39 @@ QQ.Rectangle {
 
             Controls.Button {
                 text: "Use video"
-                enabled: !editor.loading && editor.videoPath.length > 0
+                enabled:
+                    !editor.loading && !editor.matching &&
+                    editor.videoPath.length > 0
                 palette.buttonText: editor.primaryColor
                 onClicked: editor.accepted()
+            }
+        }
+    }
+
+    QQ.Rectangle {
+        anchors.fill: parent
+        visible: editor.matching
+        z: 2
+        radius: editor.radius
+        color: Qt.alpha(editor.surfaceColor, 0.94)
+
+        QQ.Column {
+            anchors.centerIn: parent
+            spacing: 10
+
+            Controls.BusyIndicator {
+                anchors.horizontalCenter: parent.horizontalCenter
+                running: editor.matching
+                width: 42
+                height: 42
+            }
+
+            Controls.Label {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Matching your resolution…"
+                color: editor.textColor
+                font.pixelSize: 13
+                font.bold: true
             }
         }
     }

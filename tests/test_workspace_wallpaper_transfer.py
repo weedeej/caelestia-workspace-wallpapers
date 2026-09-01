@@ -16,10 +16,13 @@ class WorkspaceWallpaperTransferTest(unittest.TestCase):
         self.home = Path(self.temporary_home.name)
         self.image = self.home / "Pictures/Wallpapers/still #1?.jpg"
         self.video = self.home / "Videos/Wallpapers/clip.webm"
+        self.optimized_video = self.home / "cache/clip-1920x1080.mp4"
         self.image.parent.mkdir(parents=True)
         self.video.parent.mkdir(parents=True)
+        self.optimized_video.parent.mkdir(parents=True)
         self.image.touch()
         self.video.touch()
+        self.optimized_video.touch()
         self.environment = os.environ | {
             "WORKSPACE_WALLPAPER_HOME": str(self.home)
         }
@@ -46,13 +49,24 @@ class WorkspaceWallpaperTransferTest(unittest.TestCase):
     def test_mutations_and_bundle_round_trip(self):
         self.run_cli("set-default", str(self.image))
         self.run_cli("set", "2", "__CAELESTIA_RANDOM__")
-        self.run_cli("set-video", "3", str(self.video), "12.5", "5")
+        self.run_cli(
+            "set-video", "3", str(self.video), "12.5", "5",
+            str(self.optimized_video), "1920", "1080",
+        )
 
         config = self.read_config()
         self.assertEqual(config["default"], str(self.image))
         self.assertEqual(config["workspaces"]["2"], "__CAELESTIA_RANDOM__")
         self.assertEqual(config["workspaces"]["3"]["path"], str(self.video))
         self.assertEqual(config["workspaces"]["3"]["themeFrame"], 12.5)
+        self.assertEqual(
+            config["workspaces"]["3"]["optimized"],
+            {
+                "path": str(self.optimized_video),
+                "width": 1920,
+                "height": 1080,
+            },
+        )
 
         self.run_cli("export-json", str(self.home / "exported"))
         self.run_cli("export-zip", str(self.home / "bundle"))
@@ -63,6 +77,7 @@ class WorkspaceWallpaperTransferTest(unittest.TestCase):
         self.assertNotIn("3", self.read_config()["workspaces"])
         self.run_cli("import-zip", str(self.home / "bundle.zip"))
         self.assertEqual(self.read_config()["workspaces"]["3"]["themeFrame"], 12.5)
+        self.assertNotIn("optimized", self.read_config()["workspaces"]["3"])
 
     def test_failed_mutation_does_not_change_config(self):
         self.run_cli("set-default", str(self.image))

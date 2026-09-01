@@ -74,6 +74,10 @@ ShellRoot {
     property int selectedVideoInterval: 5
     property var timelineFrames: []
     property bool timelineLoading: false
+    property bool videoMatching: false
+    property string optimizedVideoPath: ""
+    property int optimizedVideoWidth: 0
+    property int optimizedVideoHeight: 0
 
     function colour(name, fallback) {
         if (
@@ -351,10 +355,17 @@ ShellRoot {
         selectedVideoInterval = 5
         timelineFrames = []
         timelineLoading = false
+        videoMatching = false
+        optimizedVideoPath = ""
+        optimizedVideoWidth = 0
+        optimizedVideoHeight = 0
         mediaError = ""
     }
 
     function openDefaultPicker() {
+        if (videoMatching)
+            return
+
         pickerTarget = { "kind": "default" }
         resetVideoEditor()
         rescanMedia()
@@ -362,6 +373,9 @@ ShellRoot {
     }
 
     function beginAddWorkspace() {
+        if (videoMatching)
+            return
+
         pickerTarget = { "kind": "workspace", "id": -1 }
         resetVideoEditor()
         rescanMedia()
@@ -369,6 +383,9 @@ ShellRoot {
     }
 
     function editWorkspace(workspace) {
+        if (videoMatching)
+            return
+
         pickerTarget = { "kind": "workspace", "id": workspace }
         resetVideoEditor()
         rescanMedia()
@@ -376,6 +393,9 @@ ShellRoot {
     }
 
     function closePicker() {
+        if (videoMatching)
+            return
+
         pickerTarget = null
         resetVideoEditor()
     }
@@ -474,12 +494,56 @@ ShellRoot {
         ])
     }
 
+    function targetVideoWidth() {
+        if (!window.screen)
+            return 1920
+
+        return Math.max(
+            2,
+            Math.round(
+                window.screen.width * window.screen.devicePixelRatio
+            )
+        )
+    }
+
+    function targetVideoHeight() {
+        if (!window.screen)
+            return 1080
+
+        return Math.max(
+            2,
+            Math.round(
+                window.screen.height * window.screen.devicePixelRatio
+            )
+        )
+    }
+
     function commitVideo() {
         if (
             !selectedVideoPath ||
             (!pickingDefault && selectedWorkspace <= 0) ||
-            (configWriter.running || transferProcess.running)
+            (configWriter.running || transferProcess.running) ||
+            videoMatcher.running
         )
+            return
+
+        mediaError = ""
+        optimizedVideoPath = ""
+        optimizedVideoWidth = targetVideoWidth()
+        optimizedVideoHeight = targetVideoHeight()
+        videoMatching = true
+
+        videoMatcher.exec([
+            mediaHelperPath,
+            "optimize",
+            selectedVideoPath,
+            optimizedVideoWidth.toString(),
+            optimizedVideoHeight.toString()
+        ])
+    }
+
+    function writeVideoConfig() {
+        if (!optimizedVideoPath)
             return
 
         const value = {
@@ -500,7 +564,10 @@ ShellRoot {
                 "set-video-default",
                 selectedVideoPath,
                 value.themeFrame.toString(),
-                value.interval.toString()
+                value.interval.toString(),
+                optimizedVideoPath,
+                optimizedVideoWidth.toString(),
+                optimizedVideoHeight.toString()
             ])
         } else {
             configWriter.exec([
@@ -509,7 +576,10 @@ ShellRoot {
                 selectedWorkspace.toString(),
                 selectedVideoPath,
                 value.themeFrame.toString(),
-                value.interval.toString()
+                value.interval.toString(),
+                optimizedVideoPath,
+                optimizedVideoWidth.toString(),
+                optimizedVideoHeight.toString()
             ])
         }
     }
@@ -531,7 +601,8 @@ ShellRoot {
         if (
             workspace <= 0 ||
             configWriter.running ||
-            transferProcess.running
+            transferProcess.running ||
+            videoMatching
         )
             return
 
@@ -751,6 +822,49 @@ ShellRoot {
 
                 root.timelineLoading = false
             }
+        }
+    }
+
+    Process {
+        id: videoMatcher
+
+        property bool resultReady: false
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                const message = text.trim()
+
+                if (message.length > 0)
+                    root.mediaError = message
+            }
+        }
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const result = JSON.parse(text.trim())
+                    root.optimizedVideoPath = String(result.path || "")
+                    root.optimizedVideoWidth = Number(result.width) || 0
+                    root.optimizedVideoHeight = Number(result.height) || 0
+                    videoMatcher.resultReady =
+                        root.optimizedVideoPath.length > 0 &&
+                        root.optimizedVideoWidth > 0 &&
+                        root.optimizedVideoHeight > 0
+                } catch (error) {
+                    root.mediaError =
+                        "Unable to read the resolution-matched video."
+                    videoMatcher.resultReady = false
+                }
+            }
+        }
+
+        onExited: function(exitCode) {
+            root.videoMatching = false
+
+            if (exitCode === 0 && resultReady)
+                root.writeVideoConfig()
+
+            resultReady = false
         }
     }
 
@@ -1584,6 +1698,7 @@ ShellRoot {
 
                                         Controls.ComboBox {
                                             id: workspaceCombo
+                                            enabled: !root.videoMatching
 
                                             visible:
                                                 !root.pickingDefault &&
@@ -1808,6 +1923,7 @@ ShellRoot {
                                         Controls.Button {
                                             text: "Refresh"
                                             flat: true
+                                            enabled: !root.videoMatching
 
                                             palette.buttonText:
                                                 root.primary
@@ -1819,6 +1935,7 @@ ShellRoot {
                                         Controls.Button {
                                             text: "Cancel"
                                             flat: true
+                                            enabled: !root.videoMatching
 
                                             palette.buttonText:
                                                 root.primary
@@ -1885,6 +2002,7 @@ ShellRoot {
                                         interval: root.selectedVideoInterval
                                         frames: root.timelineFrames
                                         loading: root.timelineLoading
+                                        matching: root.videoMatching
 
                                         surfaceColor: root.surfaceContainerLow
                                         trackColor: root.surfaceContainerHigh
@@ -1909,8 +2027,9 @@ ShellRoot {
 
                                         items: root.pickerItems()
                                         selectionEnabled:
-                                            root.pickingDefault ||
-                                            root.selectedWorkspace > 0
+                                            !root.videoMatching &&
+                                            (root.pickingDefault ||
+                                             root.selectedWorkspace > 0)
                                         backgroundColor:
                                             root.surfaceContainerHigh
                                         primaryContainerColor:

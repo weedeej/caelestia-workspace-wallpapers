@@ -9,6 +9,7 @@ A Quickshell utility for assigning image and video wallpapers per Hyprland works
 - Unconfigured workspaces inherit the default
 - Random wallpaper mode per workspace
 - Video wallpaper support with `mpvpaper`
+- Resolution-matched video cache generation
 - Video reference-frame selection for Caelestia theming
 - Draggable video timeline with generated frame thumbnails
 - Configurable video thumbnail interval, defaulting to 5 seconds
@@ -75,6 +76,9 @@ quickshell/app/*.qml
 scripts/workspace-wallpaper
   -> ~/.config/caelestia/scripts/workspace-wallpaper
 
+scripts/workspace-wallpaper-ipc
+  -> ~/.config/caelestia/scripts/workspace-wallpaper-ipc
+
 scripts/workspace-wallpaper-media
   -> ~/.config/caelestia/scripts/workspace-wallpaper-media
 
@@ -139,7 +143,12 @@ Or launch **Workspace Wallpapers** from your application launcher.
       "type": "video",
       "path": "/home/user/Videos/Wallpapers/blackhole.webm",
       "themeFrame": 15.0,
-      "interval": 5
+      "interval": 5,
+      "optimized": {
+        "path": "/home/user/.cache/caelestia-workspace-wallpapers/videos/example/matched-1920x1080.mp4",
+        "width": 1920,
+        "height": 1080
+      }
     },
     "4": "__CAELESTIA_RANDOM__"
   }
@@ -150,7 +159,9 @@ An absent workspace key means inherit the default.
 
 Image entries remain plain absolute file paths for backward compatibility.
 
-Video entries use an object containing the video path, selected theme-reference timestamp, and thumbnail interval.
+Video entries use an object containing the original video path, selected
+theme-reference timestamp, thumbnail interval, and optional resolution-matched
+cache metadata.
 
 `__CAELESTIA_RANDOM__` is an internal sentinel used by the backend. Slect Random from the UI rather than editing it manually.
 
@@ -203,6 +214,11 @@ Example:
 
 `themeFrame` is measured in seconds.
 
+After **Use video** is selected, the editor shows a **Matching your
+resolution…** spinner while oversized video is scaled and cropped to the
+current display's physical resolution. The original file is never modified.
+Videos that are already no larger than the display are used directly.
+
 ## Video playback
 
 Video wallpapers are played with `mpvpaper`.
@@ -221,16 +237,15 @@ When a video workspace is entered:
 
 ```text
 workspace switch
-→ stop the previous mpvpaper wallpaper on the output
+→ reuse the active mpvpaper process, or start one if needed
+→ switch/start video playback immediately
 → extract the configured theme reference frame
 → caelestia wallpaper -f reference-frame.jpg
-→ wait briefly for Caelestia's scheme to update
-→ start mpvpaper with the video
 ```
 
 This lets Caelestia continue generating the adaptive color scheme from a normal still image while `mpvpaper` provides the visible video wallpaper.
 
-The reference frame may appear very briefly while switching into a video workspace.
+Playback does not wait for the adaptive scheme update.
 
 ## Video cache
 
@@ -240,13 +255,28 @@ Generated video thumbnails and theme-reference frames are cached under:
 ~/.cache/caelestia-workspace-wallpapers/videos
 ```
 
+Resolution-matched H.264 copies are stored in the same source-keyed directory.
+They omit audio and preserve the source frame rate. A completed copy is reused
+immediately on later selections at the same resolution.
+
+The original path remains authoritative. If a matching cached copy is missing
+or the workspace appears on a differently sized output, playback safely falls
+back to the original video. Portable ZIP exports omit machine-specific cache
+metadata.
+
 The cache key includes the source video's path, size, and modification time.
 
-Deleting this cache is safe while the utility is closed. Thumbnails will be regenerated the next time they are needed.
+Deleting this cache is safe while the utility is closed. Thumbnails and
+resolution-matched videos will be regenerated the next time they are needed.
+The uninstall script removes this generated cache while preserving the
+configuration and original wallpaper media.
 
 ## mpvpaper lifecycle
 
-The workspace backend owns the `mpvpaper` process used for each output.
+The workspace backend owns one `mpvpaper` process per output while that output
+has a video wallpaper. Consecutive video selections are sent to the existing
+process through mpv's local IPC socket, avoiding another layer-surface and
+player initialization.
 
 When switching from a video workspace to a still-image workspace, the backend stops the active `mpvpaper` process before applying the next Caelestia wallpaper.
 
@@ -274,7 +304,8 @@ Closing the final utility window, including through a Hyprland `SUPER+Q` bind, e
 ./uninstall.sh
 ```
 
-The uninstaller deliberately leaves your wallpaper configuration file and generated video cache untouched.
+The uninstaller removes generated thumbnails and resolution-matched videos. It
+leaves your wallpaper configuration and original image/video files untouched.
 
 ## Scope
 

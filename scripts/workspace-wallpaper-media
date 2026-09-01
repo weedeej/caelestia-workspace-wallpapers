@@ -66,6 +66,20 @@ def video_duration(path, directory=None):
     metadata.write_text(json.dumps({"duration": duration}))
     return duration
 
+def video_size(path):
+    result = run([
+        "ffprobe",
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height",
+        "-of", "json",
+        str(path),
+    ])
+    streams = json.loads(result.stdout).get("streams", [])
+    if not streams:
+        fail(f"Video has no usable video stream: {path}")
+    return int(streams[0]["width"]), int(streams[0]["height"])
+
 def extract_scaled(path, seconds, output, width):
     if output.exists() and output.stat().st_size > 0:
         return output
@@ -222,11 +236,65 @@ def frame(video, seconds):
     extract_theme_frame(path, seconds, output)
     print(str(output.resolve()))
 
+def optimize(video, width, height):
+    path = Path(video).expanduser().resolve()
+
+    if not path.is_file():
+        fail(f"Video does not exist: {path}")
+
+    width = max(2, int(width)) // 2 * 2
+    height = max(2, int(height)) // 2 * 2
+    source_width, source_height = video_size(path)
+
+    if source_width <= width and source_height <= height:
+        output = path
+    else:
+        directory = cache_dir(path)
+        output = directory / f"matched-{width}x{height}.mp4"
+
+        if not output.is_file() or output.stat().st_size == 0:
+            temp = output.with_name(output.stem + ".tmp" + output.suffix)
+            filter_graph = (
+                f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+                f"crop={width}:{height},setsar=1"
+            )
+            command = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel", "error",
+                "-i", str(path),
+                "-map", "0:v:0",
+                "-vf", filter_graph,
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", "20",
+                "-pix_fmt", "yuv420p",
+                "-an",
+                "-map_metadata", "-1",
+                "-movflags", "+faststart",
+                "-y",
+                str(temp),
+            ]
+
+            try:
+                run(command)
+                temp.replace(output)
+            finally:
+                if temp.exists():
+                    temp.unlink(missing_ok=True)
+
+    print(json.dumps({
+        "path": str(output.resolve()),
+        "width": width,
+        "height": height,
+    }, ensure_ascii=False))
+
 def main():
     if len(sys.argv) < 2:
         fail(
             "usage: workspace-wallpaper-media "
-            "scan | timeline VIDEO INTERVAL | frame VIDEO SECONDS"
+            "scan | timeline VIDEO INTERVAL | frame VIDEO SECONDS | "
+            "optimize VIDEO WIDTH HEIGHT"
         )
 
     command = sys.argv[1]
@@ -237,6 +305,8 @@ def main():
         timeline(sys.argv[2], sys.argv[3])
     elif command == "frame" and len(sys.argv) == 4:
         frame(sys.argv[2], sys.argv[3])
+    elif command == "optimize" and len(sys.argv) == 5:
+        optimize(sys.argv[2], sys.argv[3], sys.argv[4])
     else:
         fail("Invalid workspace-wallpaper-media command.")
 

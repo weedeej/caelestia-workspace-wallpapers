@@ -118,31 +118,31 @@ QQ.QtObject {
         return alterColour(value, transparencyLayers(), level)
     }
 
-    readonly property color surface:
+    readonly property var surface:
         layerColour("surface", "#18181d", 0)
-    readonly property color surfaceContainer:
+    readonly property var surfaceContainer:
         layerColour("surfaceContainer", "#202026", 1)
-    readonly property color surfaceContainerLow:
+    readonly property var surfaceContainerLow:
         layerColour("surfaceContainerLow", "#1d1d22", 1)
-    readonly property color surfaceContainerHigh:
+    readonly property var surfaceContainerHigh:
         layerColour("surfaceContainerHigh", "#292930", 1)
-    readonly property color surfaceContainerHighest:
+    readonly property var surfaceContainerHighest:
         layerColour("surfaceContainerHighest", "#33333b", 1)
-    readonly property color textSurface: colour("onSurface", "#f1f1f4")
-    readonly property color textSurfaceVariant:
+    readonly property var textSurface: colour("onSurface", "#f1f1f4")
+    readonly property var textSurfaceVariant:
         colour("onSurfaceVariant", "#b9b9c1")
-    readonly property color outline: colour("outline", "#8e8e99")
-    readonly property color outlineVariant:
+    readonly property var outline: colour("outline", "#8e8e99")
+    readonly property var outlineVariant:
         colour("outlineVariant", "#3d3d46")
-    readonly property color primary: colour("primary", "#c9bfff")
-    readonly property color textPrimary: colour("onPrimary", "#211a4b")
-    readonly property color primaryContainer:
+    readonly property var primary: colour("primary", "#c9bfff")
+    readonly property var textPrimary: colour("onPrimary", "#211a4b")
+    readonly property var primaryContainer:
         colour("primaryContainer", "#48406f")
-    readonly property color textPrimaryContainer:
+    readonly property var textPrimaryContainer:
         colour("onPrimaryContainer", "#e7deff")
-    readonly property color error: colour("error", "#ffb4ab")
-    readonly property color textError: colour("onError", "#690005")
-    readonly property color scrim: colour("scrim", "#000000")
+    readonly property var error: colour("error", "#ffb4ab")
+    readonly property var textError: colour("onError", "#690005")
+    readonly property var scrim: colour("scrim", "#000000")
 
     function entryType(entry) {
         if (entry === undefined || entry === null || entry === "")

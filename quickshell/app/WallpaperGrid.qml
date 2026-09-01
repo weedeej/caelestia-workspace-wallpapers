@@ -30,7 +30,10 @@ Controls.ScrollView {
     QQ.GridView {
         id: view
 
-        cellWidth: 160
+        readonly property int columnCount:
+            Math.max(1, Math.floor(width / 160))
+
+        cellWidth: width / columnCount
         cellHeight: 105
         model: grid.items
 

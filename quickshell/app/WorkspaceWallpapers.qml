@@ -19,6 +19,18 @@ ShellRoot {
         }
     }
 
+    HyprlandFocusGrab {
+        id: pickerFocusGrab
+
+        windows: [pickerPanel]
+        active:
+            root.pickerOpen &&
+            !root.pickerClosing &&
+            !root.videoMatching
+
+        onCleared: root.closePicker()
+    }
+
     property string home: Quickshell.env("HOME")
     property string configPath:
         home + "/.config/caelestia/workspace-wallpapers.json"
@@ -53,6 +65,8 @@ ShellRoot {
         "__CAELESTIA_RANDOM__"
 
     property var pickerTarget: null
+    property var pickerAnchor: null
+    property bool pickerClosing: false
     readonly property bool pickerOpen: pickerTarget !== null
     readonly property bool pickingDefault:
         pickerTarget !== null && pickerTarget.kind === "default"
@@ -329,21 +343,15 @@ ShellRoot {
         exportJsonDialog.open()
     }
 
-    function scrollPickerIntoView() {
+    function positionPicker() {
         Qt.callLater(function() {
-            const flick = mainScroll.contentItem
-
             if (
-                !flick ||
-                flick.contentY === undefined ||
-                flick.contentHeight === undefined
+                !pickerPanel.visible ||
+                !pickerAnchor
             )
                 return
 
-            const targetY = Math.max(0, pickerPanel.y - 12)
-            const maxY = Math.max(0, flick.contentHeight - flick.height)
-
-            flick.contentY = Math.min(targetY, maxY)
+            pickerPanel.anchor.updateAnchor()
         })
     }
 
@@ -362,41 +370,56 @@ ShellRoot {
         mediaError = ""
     }
 
-    function openDefaultPicker() {
-        if (videoMatching)
-            return
-
-        pickerTarget = { "kind": "default" }
+    function showPicker(target, anchorItem) {
+        pickerExitAnimation.stop()
+        pickerClosing = false
+        pickerAnchor = anchorItem
+        pickerTarget = target
         resetVideoEditor()
         rescanMedia()
-        scrollPickerIntoView()
+        positionPicker()
+        Qt.callLater(function() {
+            pickerEnterAnimation.restart()
+        })
     }
 
-    function beginAddWorkspace() {
+    function openDefaultPicker(anchorItem) {
         if (videoMatching)
             return
 
-        pickerTarget = { "kind": "workspace", "id": -1 }
-        resetVideoEditor()
-        rescanMedia()
-        scrollPickerIntoView()
+        showPicker({ "kind": "default" }, anchorItem)
     }
 
-    function editWorkspace(workspace) {
+    function beginAddWorkspace(anchorItem) {
         if (videoMatching)
             return
 
-        pickerTarget = { "kind": "workspace", "id": workspace }
-        resetVideoEditor()
-        rescanMedia()
-        scrollPickerIntoView()
+        showPicker({ "kind": "workspace", "id": -1 }, anchorItem)
+    }
+
+    function editWorkspace(workspace, anchorItem) {
+        if (videoMatching)
+            return
+
+        showPicker(
+            { "kind": "workspace", "id": workspace },
+            anchorItem
+        )
     }
 
     function closePicker() {
-        if (videoMatching)
+        if (videoMatching || !pickerOpen || pickerClosing)
             return
 
+        pickerClosing = true
+        pickerEnterAnimation.stop()
+        pickerExitAnimation.restart()
+    }
+
+    function finalizePickerClose() {
         pickerTarget = null
+        pickerAnchor = null
+        pickerClosing = false
         resetVideoEditor()
     }
 
@@ -475,7 +498,7 @@ ShellRoot {
 
         videoEditorOpen = true
         loadTimeline()
-        scrollPickerIntoView()
+        positionPicker()
     }
 
     function loadTimeline() {
@@ -915,6 +938,21 @@ ShellRoot {
             anchors.fill: parent
             color: root.surface
 
+            onWidthChanged: root.positionPicker()
+            onHeightChanged: root.positionPicker()
+
+            QQ.Connections {
+                target: mainScroll.contentItem
+
+                function onContentXChanged() {
+                    root.positionPicker()
+                }
+
+                function onContentYChanged() {
+                    root.positionPicker()
+                }
+            }
+
             Dialogs.FileDialog {
                 id: importJsonDialog
 
@@ -1156,6 +1194,8 @@ ShellRoot {
                                         QQ.MouseArea {
                                             id: transferMenuMouse
 
+                                            property bool menuVisibleOnPress: false
+
                                             anchors.fill: parent
                                             enabled:
                                                 !transferProcess.running &&
@@ -1166,7 +1206,15 @@ ShellRoot {
                                                     ? Qt.PointingHandCursor
                                                     : Qt.ArrowCursor
 
+                                            onPressed:
+                                                menuVisibleOnPress = transferMenu.visible
+
                                             onClicked: {
+                                                if (menuVisibleOnPress) {
+                                                    transferMenu.close()
+                                                    return
+                                                }
+
                                                 const point =
                                                     transferSplitButton.mapToItem(
                                                         themeLayer,
@@ -1215,7 +1263,7 @@ ShellRoot {
                                             popupType: Controls.Popup.Item
                                             closePolicy:
                                                 Controls.Popup.CloseOnEscape |
-                                                Controls.Popup.CloseOnPressOutside
+                                                Controls.Popup.CloseOnReleaseOutside
 
                                             background: QQ.Rectangle {
                                                 radius: 16
@@ -1469,7 +1517,9 @@ ShellRoot {
                                 textPrimaryContainerColor:
                                     root.textPrimaryContainer
 
-                                onEditRequested: root.openDefaultPicker()
+                                onEditRequested: function(anchorItem) {
+                                    root.openDefaultPicker(anchorItem)
+                                }
                             }
 
                             Layouts.RowLayout {
@@ -1487,14 +1537,48 @@ ShellRoot {
                                 }
 
                                 Controls.Button {
+                                    id: addWorkspaceButton
+
                                     text: "+ Add"
                                     flat: true
+                                    hoverEnabled: true
+                                    implicitWidth:
+                                        contentItem.implicitWidth +
+                                        leftPadding + rightPadding
+                                    implicitHeight: 42
+                                    leftPadding: 16
+                                    rightPadding: 16
 
-                                    palette.buttonText:
-                                        root.primary
+                                    contentItem: Controls.Label {
+                                        text: addWorkspaceButton.text
+                                        color: root.primary
+                                        font.pixelSize: 13
+                                        font.weight: 600
+                                        horizontalAlignment:
+                                            QQ.Text.AlignHCenter
+                                        verticalAlignment:
+                                            QQ.Text.AlignVCenter
+                                    }
+
+                                    background: QQ.Rectangle {
+                                        radius: 21
+                                        color:
+                                            addWorkspaceButton.down
+                                                ? Qt.alpha(root.primary, 0.16)
+                                                : addWorkspaceButton.hovered
+                                                    ? Qt.alpha(root.primary, 0.10)
+                                                    : "transparent"
+                                        border.width: 0
+
+                                        QQ.Behavior on color {
+                                            QQ.ColorAnimation {
+                                                duration: 120
+                                            }
+                                        }
+                                    }
 
                                     onClicked:
-                                        root.beginAddWorkspace()
+                                        root.beginAddWorkspace(addWorkspaceButton)
                                 }
 
                                 QQ.Item {
@@ -1592,10 +1676,12 @@ ShellRoot {
                                                 textPrimaryContainerColor:
                                                     root.textPrimaryContainer
 
-                                                onEditRequested:
+                                                onEditRequested: function(anchorItem) {
                                                     root.editWorkspace(
-                                                        workspaceCard.workspace
+                                                        workspaceCard.workspace,
+                                                        anchorItem
                                                     )
+                                                }
                                                 onRemoveRequested:
                                                     root.clearWorkspace(
                                                         workspaceCard.workspace
@@ -1606,32 +1692,89 @@ ShellRoot {
                                 }
                             }
 
-                            QQ.Rectangle {
+                            PopupWindow {
                                 id: pickerPanel
 
-                                visible:
-                                    root.pickerOpen
-
-                                Layouts.Layout.fillWidth: true
-
-                                Layouts.Layout.preferredHeight:
+                                visible: root.pickerOpen
+                                implicitWidth: 720
+                                implicitHeight:
                                     root.videoEditorOpen
                                         ? 520
                                         : 330
+                                color: "transparent"
+                                grabFocus: false
 
-                                radius: 14
+                                anchor.item: root.pickerAnchor
+                                anchor.edges: Edges.Bottom
+                                anchor.gravity: Edges.Bottom
+                                anchor.adjustment: PopupAdjustment.FlipY
+                                anchor.margins.bottom: -8
 
-                                color:
-                                    root.surfaceContainer
+                                onWidthChanged: root.positionPicker()
+                                onHeightChanged: root.positionPicker()
+                                onVisibleChanged: {
+                                    if (visible) {
+                                        Qt.callLater(function() {
+                                            pickerSurface.forceActiveFocus()
+                                        })
+                                    }
+                                }
+                                onClosed: {
+                                    pickerEnterAnimation.stop()
+                                    pickerExitAnimation.stop()
 
-                                border.width: 1
-                                border.color:
-                                    root.outlineVariant
+                                    if (root.pickerTarget !== null)
+                                        root.finalizePickerClose()
+                                }
 
-                                Layouts.ColumnLayout {
+                                QQ.Shortcut {
+                                    sequence: "Escape"
+                                    context: Qt.ApplicationShortcut
+                                    enabled: !root.videoMatching
+                                    onActivated: root.closePicker()
+                                }
+
+                                QQ.Item {
+                                    id: pickerSurface
+
                                     anchors.fill: parent
-                                    anchors.margins: 12
-                                    spacing: 10
+                                    focus: true
+                                    enabled: !root.pickerClosing
+                                    opacity: 1
+                                    property real animatedScale: 1
+                                    property real animatedOffsetY: 0
+
+                                    QQ.Keys.onEscapePressed: function(event) {
+                                        if (!root.videoMatching) {
+                                            root.closePicker()
+                                            event.accepted = true
+                                        }
+                                    }
+
+                                    transform: [
+                                        QQ.Translate {
+                                            y: pickerSurface.animatedOffsetY
+                                        },
+                                        QQ.Scale {
+                                            origin.x: pickerSurface.width / 2
+                                            origin.y: 0
+                                            xScale: pickerSurface.animatedScale
+                                            yScale: pickerSurface.animatedScale
+                                        }
+                                    ]
+
+                                    QQ.Rectangle {
+                                        anchors.fill: parent
+                                        radius: 14
+                                        color: root.surfaceContainer
+                                        border.width: 1
+                                        border.color: root.outlineVariant
+                                    }
+
+                                    Layouts.ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        spacing: 10
 
                                     Layouts.RowLayout {
                                         Layouts.Layout.fillWidth: true
@@ -1921,24 +2064,98 @@ ShellRoot {
                                         }
 
                                         Controls.Button {
+                                            id: refreshButton
+
                                             text: "Refresh"
                                             flat: true
+                                            hoverEnabled: true
                                             enabled: !root.videoMatching
+                                            implicitWidth:
+                                                contentItem.implicitWidth +
+                                                leftPadding + rightPadding
+                                            implicitHeight: 42
+                                            leftPadding: 16
+                                            rightPadding: 16
 
-                                            palette.buttonText:
-                                                root.primary
+                                            contentItem: Controls.Label {
+                                                text: refreshButton.text
+                                                color:
+                                                    refreshButton.enabled
+                                                        ? root.primary
+                                                        : Qt.alpha(root.textSurface, 0.38)
+                                                font.pixelSize: 13
+                                                font.weight: 600
+                                                horizontalAlignment:
+                                                    QQ.Text.AlignHCenter
+                                                verticalAlignment:
+                                                    QQ.Text.AlignVCenter
+                                            }
+
+                                            background: QQ.Rectangle {
+                                                radius: 21
+                                                color:
+                                                    refreshButton.down
+                                                        ? Qt.alpha(root.primary, 0.16)
+                                                        : refreshButton.hovered
+                                                            ? Qt.alpha(root.primary, 0.10)
+                                                            : "transparent"
+                                                border.width: 0
+
+                                                QQ.Behavior on color {
+                                                    QQ.ColorAnimation {
+                                                        duration: 120
+                                                    }
+                                                }
+                                            }
 
                                             onClicked:
                                                 root.rescanMedia()
                                         }
 
                                         Controls.Button {
+                                            id: cancelButton
+
                                             text: "Cancel"
                                             flat: true
+                                            hoverEnabled: true
                                             enabled: !root.videoMatching
+                                            implicitWidth:
+                                                contentItem.implicitWidth +
+                                                leftPadding + rightPadding
+                                            implicitHeight: 42
+                                            leftPadding: 16
+                                            rightPadding: 16
 
-                                            palette.buttonText:
-                                                root.primary
+                                            contentItem: Controls.Label {
+                                                text: cancelButton.text
+                                                color:
+                                                    cancelButton.enabled
+                                                        ? root.primary
+                                                        : Qt.alpha(root.textSurface, 0.38)
+                                                font.pixelSize: 13
+                                                font.weight: 600
+                                                horizontalAlignment:
+                                                    QQ.Text.AlignHCenter
+                                                verticalAlignment:
+                                                    QQ.Text.AlignVCenter
+                                            }
+
+                                            background: QQ.Rectangle {
+                                                radius: 21
+                                                color:
+                                                    cancelButton.down
+                                                        ? Qt.alpha(root.primary, 0.16)
+                                                        : cancelButton.hovered
+                                                            ? Qt.alpha(root.primary, 0.10)
+                                                            : "transparent"
+                                                border.width: 0
+
+                                                QQ.Behavior on color {
+                                                    QQ.ColorAnimation {
+                                                        duration: 120
+                                                    }
+                                                }
+                                            }
 
                                             onClicked:
                                                 root.closePicker()
@@ -2040,6 +2257,89 @@ ShellRoot {
                                         onItemSelected: function(item) {
                                             root.handlePickerItem(item)
                                         }
+                                    }
+                                }
+                                }
+
+                                QQ.SequentialAnimation {
+                                    id: pickerEnterAnimation
+
+                                    QQ.PropertyAction {
+                                        target: pickerSurface
+                                        property: "opacity"
+                                        value: 0
+                                    }
+
+                                    QQ.PropertyAction {
+                                        target: pickerSurface
+                                        property: "animatedScale"
+                                        value: 0.96
+                                    }
+
+                                    QQ.PropertyAction {
+                                        target: pickerSurface
+                                        property: "animatedOffsetY"
+                                        value: -8
+                                    }
+
+                                    QQ.ParallelAnimation {
+                                        QQ.NumberAnimation {
+                                            target: pickerSurface
+                                            property: "opacity"
+                                            to: 1
+                                            duration: 170
+                                            easing.type: QQ.Easing.OutCubic
+                                        }
+
+                                        QQ.NumberAnimation {
+                                            target: pickerSurface
+                                            property: "animatedScale"
+                                            to: 1
+                                            duration: 190
+                                            easing.type: QQ.Easing.OutCubic
+                                        }
+
+                                        QQ.NumberAnimation {
+                                            target: pickerSurface
+                                            property: "animatedOffsetY"
+                                            to: 0
+                                            duration: 190
+                                            easing.type: QQ.Easing.OutCubic
+                                        }
+                                    }
+                                }
+
+                                QQ.SequentialAnimation {
+                                    id: pickerExitAnimation
+
+                                    QQ.ParallelAnimation {
+                                        QQ.NumberAnimation {
+                                            target: pickerSurface
+                                            property: "opacity"
+                                            to: 0
+                                            duration: 120
+                                            easing.type: QQ.Easing.InCubic
+                                        }
+
+                                        QQ.NumberAnimation {
+                                            target: pickerSurface
+                                            property: "animatedScale"
+                                            to: 0.97
+                                            duration: 120
+                                            easing.type: QQ.Easing.InCubic
+                                        }
+
+                                        QQ.NumberAnimation {
+                                            target: pickerSurface
+                                            property: "animatedOffsetY"
+                                            to: -5
+                                            duration: 120
+                                            easing.type: QQ.Easing.InCubic
+                                        }
+                                    }
+
+                                    QQ.ScriptAction {
+                                        script: root.finalizePickerClose()
                                     }
                                 }
                             }

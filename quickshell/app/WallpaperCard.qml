@@ -20,7 +20,7 @@ ClippingRectangle {
 
     property bool compact: false
 
-    signal editRequested()
+    signal editRequested(var anchorItem)
     signal removeRequested()
 
     radius: compact ? 12 : 16
@@ -114,6 +114,8 @@ ClippingRectangle {
         color: Qt.rgba(0, 0, 0, card.compact ? 0.34 : 0.26)
 
         QQ.Rectangle {
+            id: editButton
+
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: card.compact ? parent.left : undefined
             anchors.leftMargin: card.compact ? 12 : 0
@@ -134,7 +136,7 @@ ClippingRectangle {
             QQ.MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: card.editRequested()
+                onClicked: card.editRequested(editButton)
             }
         }
 

@@ -30,6 +30,7 @@ QQ.QtObject {
     property string mediaError: ""
     property string transferStatus: ""
     property bool transferImporting: false
+    property bool transferMatching: false
     property string wallpaperPath: ""
     property real wallLuminance: 0
 

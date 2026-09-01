@@ -34,6 +34,10 @@ install -m 0644 \
     "$ROOT/quickshell/shell.qml" \
     "$QS_DIR/shell.qml"
 
+install -m 0644 \
+    "$ROOT"/quickshell/app/*.qml \
+    "$QS_DIR/app/"
+
 install -m 0755 \
     "$ROOT/scripts/workspace-wallpaper" \
     "$CAELESTIA_SCRIPTS/workspace-wallpaper"

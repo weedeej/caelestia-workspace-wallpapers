@@ -115,6 +115,36 @@ def set_video_workspace(arguments: list[str]) -> None:
     write_json_atomic(CONFIG, config)
 
 
+def set_optimized(arguments: list[str]) -> None:
+    if len(arguments) != 4:
+        raise ValueError(
+            "set-optimized requires a video path, optimized path, width, and height."
+        )
+    video_path = require_file(arguments[0], "Video")
+    optimized_path = require_file(arguments[1], "Optimized video")
+    width = int(nonnegative_number(arguments[2], "Width"))
+    height = int(nonnegative_number(arguments[3], "Height"))
+    if width <= 0 or height <= 0:
+        raise ValueError("Optimized video dimensions must be positive.")
+
+    config = config_or_default()
+    optimized = {"path": optimized_path, "width": width, "height": height}
+    matched = False
+    entries = [config.get("default", ""), *config["workspaces"].values()]
+    for entry in entries:
+        if (
+            isinstance(entry, dict)
+            and entry.get("type") == "video"
+            and isinstance(entry.get("path"), str)
+            and str(Path(entry["path"]).expanduser().resolve()) == video_path
+        ):
+            entry["optimized"] = optimized.copy()
+            matched = True
+    if not matched:
+        raise ValueError(f"Video is not referenced by the config: {video_path}")
+    write_json_atomic(CONFIG, config)
+
+
 def clear_workspace(arguments: list[str]) -> None:
     if len(arguments) != 1 or not arguments[0]:
         raise ValueError("clear requires a workspace.")
@@ -126,8 +156,9 @@ def clear_workspace(arguments: list[str]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=(
-        "set-default", "set", "set-video-default", "set-video", "clear",
-        "import-json", "import-zip", "export-json", "export-zip",
+        "set-default", "set", "set-video-default", "set-video",
+        "set-optimized", "clear", "import-json", "import-zip",
+        "export-json", "export-zip",
     ))
     parser.add_argument("arguments", nargs="*")
     arguments = parser.parse_args()
@@ -142,6 +173,7 @@ def main() -> None:
         "set": set_workspace,
         "set-video-default": set_video_default,
         "set-video": set_video_workspace,
+        "set-optimized": set_optimized,
         "clear": clear_workspace,
     }
     try:

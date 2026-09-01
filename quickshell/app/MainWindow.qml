@@ -118,6 +118,30 @@ FloatingWindow {
             }
         }
 
+        QQ.Rectangle {
+            anchors.fill: parent
+            z: 100
+            visible: window.state.transferMatching
+            color: Qt.alpha(window.state.scrim, 0.58)
+
+            QQ.MouseArea { anchors.fill: parent }
+
+            Layouts.RowLayout {
+                anchors.centerIn: parent
+                spacing: Tokens.spacing.medium
+
+                Controls.BusyIndicator {
+                    running: parent.parent.visible
+                }
+
+                Controls.Label {
+                    text: window.state.transferStatus
+                    color: window.state.textSurface
+                    font: Tokens.font.body.medium
+                }
+            }
+        }
+
         QQ.SequentialAnimation {
             id: themeSwapAnimation
 

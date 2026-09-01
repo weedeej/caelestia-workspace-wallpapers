@@ -7,7 +7,66 @@ QQ.Item {
     required property var state
     required property var picker
     required property var configService
+    property var importedVideos: []
+    property int importedVideoIndex: 0
+    property string importedOptimizedPath: ""
+    property int importedOptimizedWidth: 0
+    property int importedOptimizedHeight: 0
     visible: false
+
+    function matchImportedVideos() {
+        const videos = []
+        const seen = ({})
+        const add = function(entry) {
+            if (!service.state.isVideoEntry(entry))
+                return
+            const path = service.state.entryPath(entry)
+            if (path && !seen[path]) {
+                seen[path] = true
+                videos.push(path)
+            }
+        }
+        add(state.configData.default)
+        const workspaces = state.configData.workspaces || ({})
+        Object.keys(workspaces).forEach(key => add(workspaces[key]))
+
+        importedVideos = videos
+        importedVideoIndex = 0
+        if (videos.length === 0) {
+            configService.finishImport()
+            return
+        }
+        state.transferMatching = true
+        matchNextImportedVideo()
+    }
+
+    function matchNextImportedVideo() {
+        if (importedVideoIndex >= importedVideos.length) {
+            state.transferMatching = false
+            state.transferStatus = "Imported and matched " +
+                importedVideos.length + " video(s)."
+            configService.finishImport()
+            return
+        }
+        const path = importedVideos[importedVideoIndex]
+        state.transferStatus = "Matching your resolution - " + state.basename(path)
+        importedOptimizedPath = ""
+        importedOptimizedWidth = 0
+        importedOptimizedHeight = 0
+        importedVideoMatcher.errorMessage = ""
+        importedVideoWriter.errorMessage = ""
+        importedVideoMatcher.exec([
+            state.mediaHelperPath, "optimize", path,
+            picker.targetVideoWidth().toString(),
+            picker.targetVideoHeight().toString()
+        ])
+    }
+
+    function failImportedVideoMatch(message) {
+        state.transferMatching = false
+        state.transferStatus = message || "Unable to match imported video."
+        configService.finishImport()
+    }
 
     function rescan() {
         if (!mediaScanner.running)
@@ -121,6 +180,61 @@ QQ.Item {
             if (exitCode === 0 && resultReady)
                 service.configService.writeVideoConfig()
             resultReady = false
+        }
+    }
+
+    Process {
+        id: importedVideoMatcher
+        property string errorMessage: ""
+
+        stderr: StdioCollector {
+            onStreamFinished: importedVideoMatcher.errorMessage = text.trim()
+        }
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const result = JSON.parse(text.trim())
+                    service.importedOptimizedPath = String(result.path || "")
+                    service.importedOptimizedWidth = Number(result.width) || 0
+                    service.importedOptimizedHeight = Number(result.height) || 0
+                } catch (error) {
+                    importedVideoMatcher.errorMessage =
+                        "Unable to read the resolution-matched video."
+                }
+            }
+        }
+        onExited: function(exitCode) {
+            if (exitCode !== 0 || !service.importedOptimizedPath) {
+                service.failImportedVideoMatch(errorMessage)
+                return
+            }
+            importedVideoWriter.exec([
+                service.state.helperPath, "set-optimized",
+                service.importedVideos[service.importedVideoIndex],
+                service.importedOptimizedPath,
+                service.importedOptimizedWidth.toString(),
+                service.importedOptimizedHeight.toString()
+            ])
+        }
+    }
+
+    Process {
+        id: importedVideoWriter
+        property string errorMessage: ""
+
+        stderr: StdioCollector {
+            onStreamFinished: importedVideoWriter.errorMessage = text.trim()
+        }
+        onExited: function(exitCode) {
+            if (exitCode !== 0) {
+                service.failImportedVideoMatch(errorMessage)
+                return
+            }
+            service.importedOptimizedPath = ""
+            service.importedOptimizedWidth = 0
+            service.importedOptimizedHeight = 0
+            service.importedVideoIndex++
+            service.matchNextImportedVideo()
         }
     }
 }

@@ -7,8 +7,11 @@ QQ.Item {
 
     required property var state
     required property var picker
-    readonly property bool busy: transferProcess.running || configWriter.running
+    readonly property bool busy:
+        transferProcess.running || configWriter.running || state.transferMatching
+    property bool pendingZipMatch: false
     signal rescanRequested()
+    signal zipImportReady()
 
     visible: false
 
@@ -23,6 +26,7 @@ QQ.Item {
             return
         state.transferStatus = "Working…"
         state.transferImporting = action.startsWith("import-")
+        transferProcess.action = action
         transferProcess.exec([
             state.helperPath, action, localPath(fileUrl)
         ])
@@ -94,6 +98,14 @@ QQ.Item {
         configFile.reload()
     }
 
+    function finishImport() {
+        configFile.reload()
+        rescanRequested()
+        if (Hyprland.focusedWorkspace)
+            applyWorkspace(Hyprland.focusedWorkspace.id)
+        state.transferImporting = false
+    }
+
     FileView {
         id: configFile
         path: service.state.configPath
@@ -105,6 +117,10 @@ QQ.Item {
                 const raw = text()
                 if (raw && raw.length > 0)
                     service.state.configData = JSON.parse(raw)
+                if (service.pendingZipMatch) {
+                    service.pendingZipMatch = false
+                    service.zipImportReady()
+                }
             } catch (error) {
                 console.warn("Unable to read workspace wallpaper config:", error)
             }
@@ -141,6 +157,7 @@ QQ.Item {
 
     Process {
         id: transferProcess
+        property string action: ""
 
         stderr: StdioCollector {
             onStreamFinished: {
@@ -158,12 +175,15 @@ QQ.Item {
         }
         onExited: function(exitCode) {
             if (exitCode === 0 && service.state.transferImporting) {
-                configFile.reload()
-                service.rescanRequested()
-                if (Hyprland.focusedWorkspace)
-                    service.applyWorkspace(Hyprland.focusedWorkspace.id)
+                if (action === "import-zip") {
+                    service.pendingZipMatch = true
+                    configFile.reload()
+                    return
+                }
+                service.finishImport()
             }
             service.state.transferImporting = false
         }
     }
+
 }

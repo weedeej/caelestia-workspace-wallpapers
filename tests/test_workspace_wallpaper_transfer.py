@@ -53,6 +53,7 @@ class WorkspaceWallpaperTransferTest(unittest.TestCase):
             "set-video", "3", str(self.video), "12.5", "5",
             str(self.optimized_video), "1920", "1080",
         )
+        self.run_cli("set-video", "4", str(self.video), "0", "5")
 
         config = self.read_config()
         self.assertEqual(config["default"], str(self.image))
@@ -78,6 +79,23 @@ class WorkspaceWallpaperTransferTest(unittest.TestCase):
         self.run_cli("import-zip", str(self.home / "bundle.zip"))
         self.assertEqual(self.read_config()["workspaces"]["3"]["themeFrame"], 12.5)
         self.assertNotIn("optimized", self.read_config()["workspaces"]["3"])
+
+        self.run_cli(
+            "set-optimized", str(self.video), str(self.optimized_video),
+            "1920", "1080",
+        )
+        self.assertEqual(
+            self.read_config()["workspaces"]["3"]["optimized"],
+            {
+                "path": str(self.optimized_video),
+                "width": 1920,
+                "height": 1080,
+            },
+        )
+        self.assertEqual(
+            self.read_config()["workspaces"]["4"]["optimized"],
+            self.read_config()["workspaces"]["3"]["optimized"],
+        )
 
     def test_failed_mutation_does_not_change_config(self):
         self.run_cli("set-default", str(self.image))

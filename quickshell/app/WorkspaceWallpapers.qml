@@ -24,6 +24,7 @@ ShellRoot {
         state: state
         picker: picker
         onRescanRequested: mediaService.rescan()
+        onZipImportReady: mediaService.matchImportedVideos()
     }
 
     MediaService {

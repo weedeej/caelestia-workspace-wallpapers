@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Send the small set of mpv IPC commands used by workspace-wallpaper."""
+
+from __future__ import annotations
+
+import json
+import socket
+import sys
+
+
+def fail(message: str) -> None:
+    print(message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def load(socket_path: str, video_path: str, start: str) -> None:
+    request = {
+        "command": ["loadfile", video_path, "replace", -1, {"start": start}],
+        "request_id": 1,
+    }
+
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(1.0)
+            client.connect(socket_path)
+            client.sendall(json.dumps(request, separators=(",", ":")).encode() + b"\n")
+
+            pending = b""
+            while True:
+                chunk = client.recv(4096)
+                if not chunk:
+                    fail("mpv IPC closed before acknowledging the command.")
+                pending += chunk
+
+                while b"\n" in pending:
+                    line, pending = pending.split(b"\n", 1)
+                    response = json.loads(line)
+                    if response.get("request_id") != 1:
+                        continue
+                    if response.get("error") != "success":
+                        fail(f"mpv IPC load failed: {response.get('error', 'unknown error')}")
+                    return
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        fail(f"mpv IPC load failed: {error}")
+
+
+def main() -> None:
+    if len(sys.argv) != 5 or sys.argv[1] != "load":
+        fail("usage: workspace-wallpaper-ipc load SOCKET VIDEO START")
+
+    load(sys.argv[2], sys.argv[3], sys.argv[4])
+
+
+if __name__ == "__main__":
+    main()

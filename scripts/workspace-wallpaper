@@ -5,7 +5,8 @@ CONFIG="$HOME/.config/caelestia/workspace-wallpapers.json"
 IMAGE_DIR="$HOME/Pictures/Wallpapers"
 RANDOM_VALUE="__CAELESTIA_RANDOM__"
 MEDIA_HELPER="$HOME/.config/caelestia/scripts/workspace-wallpaper-media"
-SCHEME_FILE="$HOME/.local/state/caelestia/scheme.json"
+IPC_HELPER="$HOME/.config/caelestia/scripts/workspace-wallpaper-ipc"
+OVERLAY_DIR="$HOME/.config/quickshell/workspace-wallpapers/overlay"
 
 WORKSPACE="${1:-}"
 [[ -n "$WORKSPACE" ]] || exit 0
@@ -13,6 +14,7 @@ WORKSPACE="${1:-}"
 
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 STATE="$RUNTIME_DIR/caelestia-workspace-wallpaper"
+OVERLAY_STATE="$RUNTIME_DIR/caelestia-workspace-wallpaper-overlay"
 LOCK="$RUNTIME_DIR/caelestia-workspace-wallpaper.lock"
 VIDEO_STATE_DIR="$RUNTIME_DIR/caelestia-workspace-wallpaper-video"
 
@@ -28,6 +30,22 @@ is_current_workspace() {
 
 is_current_workspace || exit 0
 
+mapfile -t OVERLAY_CONFIG < <(
+    jq -r '[.showWorkspaceNumber == true,
+        (.workspaceNumberPosition // "center")] | .[]' "$CONFIG"
+)
+SHOW_WORKSPACE_NUMBER="${OVERLAY_CONFIG[0]:-false}"
+WORKSPACE_NUMBER_POSITION="${OVERLAY_CONFIG[1]:-center}"
+case "$WORKSPACE_NUMBER_POSITION" in
+    top-left|top-right|center|bottom-left|bottom-right) ;;
+    *) WORKSPACE_NUMBER_POSITION="center" ;;
+esac
+
+if [[ "$SHOW_WORKSPACE_NUMBER" == "true" ]]; then
+    printf '%s\n%s\n' "$WORKSPACE" "$WORKSPACE_NUMBER_POSITION" > "$OVERLAY_STATE"
+    qs -p "$OVERLAY_DIR" -n -d >/dev/null 2>&1 || true
+fi
+
 mapfile -t ENTRY_FIELDS < <(
     jq -r \
         --arg ws "$WORKSPACE" \
@@ -39,7 +57,10 @@ mapfile -t ENTRY_FIELDS < <(
          then [
              ($entry.type // "image"),
              ($entry.path // ""),
-             (($entry.themeFrame // 0) | tostring)
+             (($entry.themeFrame // 0) | tostring),
+             ($entry.optimized.path // ""),
+             (($entry.optimized.width // 0) | tostring),
+             (($entry.optimized.height // 0) | tostring)
          ]
          elif $entry == $random
          then ["random", "", "0"]
@@ -52,20 +73,29 @@ mapfile -t ENTRY_FIELDS < <(
 TYPE="${ENTRY_FIELDS[0]:-}"
 WALLPAPER="${ENTRY_FIELDS[1]:-}"
 FRAME="${ENTRY_FIELDS[2]:-0}"
+OPTIMIZED_VIDEO="${ENTRY_FIELDS[3]:-}"
+OPTIMIZED_WIDTH="${ENTRY_FIELDS[4]:-0}"
+OPTIMIZED_HEIGHT="${ENTRY_FIELDS[5]:-0}"
 
 [[ -n "$TYPE" ]] || exit 0
 
-workspace_output() {
+workspace_output_fields() {
     hyprctl monitors -j 2>/dev/null |
         jq -r \
             --argjson ws "$WORKSPACE" \
-            '([.[] |
+            '(([.[] |
                select(.activeWorkspace.id == $ws) |
-               .name][0]) //
+               .][0]) //
              ([.[] |
                select(.focused == true) |
-               .name][0]) //
-             empty'
+               .][0])) as $output |
+             if $output == null then empty else
+                 $output.name,
+                 (if (($output.transform // 0) % 2) == 1
+                  then $output.height else $output.width end),
+                 (if (($output.transform // 0) % 2) == 1
+                  then $output.width else $output.height end)
+             end'
 }
 
 safe_output_name() {
@@ -78,6 +108,7 @@ stop_video_for_output() {
     local output="$1"
     local safe
     local pidfile
+    local socket
     local pid=""
     local attempt
     local targeted=0
@@ -86,11 +117,15 @@ stop_video_for_output() {
 
     safe="$(safe_output_name "$output")"
     pidfile="$VIDEO_STATE_DIR/$safe.pid"
+    socket="$VIDEO_STATE_DIR/$safe.sock"
 
-    [[ -f "$pidfile" ]] || return 0
+    if [[ ! -f "$pidfile" ]]; then
+        rm -f "$socket"
+        return 0
+    fi
 
     IFS= read -r pid < "$pidfile" 2>/dev/null || true
-    rm -f "$pidfile"
+    rm -f "$pidfile" "$socket"
 
     [[ "$pid" =~ ^[0-9]+$ ]] || return 0
     [[ -r "/proc/$pid/cmdline" ]] || return 0
@@ -118,33 +153,31 @@ stop_video_for_output() {
     kill -KILL "$pid" 2>/dev/null || true
 }
 
-scheme_stamp() {
-    if [[ -f "$SCHEME_FILE" ]]; then
-        stat -c '%y:%s' "$SCHEME_FILE" 2>/dev/null
-    fi
+reuse_video_for_output() {
+    local output="$1"
+    local video="$2"
+    local frame="$3"
+    local safe
+    local pidfile
+    local socket
+    local pid=""
+
+    safe="$(safe_output_name "$output")"
+    pidfile="$VIDEO_STATE_DIR/$safe.pid"
+    socket="$VIDEO_STATE_DIR/$safe.sock"
+
+    [[ -x "$IPC_HELPER" && -f "$pidfile" && -S "$socket" ]] || return 1
+    IFS= read -r pid < "$pidfile" 2>/dev/null || return 1
+    [[ "$pid" =~ ^[0-9]+$ && -r "/proc/$pid/cmdline" ]] || return 1
+    [[ "$(<"/proc/$pid/comm")" == "mpvpaper" ]] || return 1
+
+    "$IPC_HELPER" load "$socket" "$video" "$frame"
 }
 
-wait_for_scheme_change() {
-    local before="$1"
-    local current
-    local attempt
-
-    for attempt in {1..12}; do
-        is_current_workspace || return 1
-
-        current="$(scheme_stamp)"
-
-        if [[ -n "$current" && "$current" != "$before" ]]; then
-            return 0
-        fi
-
-        sleep 0.05
-    done
-
-    return 0
-}
-
-OUTPUT="$(workspace_output)"
+mapfile -t OUTPUT_FIELDS < <(workspace_output_fields)
+OUTPUT="${OUTPUT_FIELDS[0]:-}"
+OUTPUT_WIDTH="${OUTPUT_FIELDS[1]:-0}"
+OUTPUT_HEIGHT="${OUTPUT_FIELDS[2]:-0}"
 [[ -n "$OUTPUT" ]] || exit 0
 
 exec 9>"$LOCK"
@@ -156,45 +189,52 @@ case "$TYPE" in
     video)
         VIDEO="$WALLPAPER"
 
+        if [[
+            -f "$OPTIMIZED_VIDEO" &&
+            "$OPTIMIZED_WIDTH" == "$OUTPUT_WIDTH" &&
+            "$OPTIMIZED_HEIGHT" == "$OUTPUT_HEIGHT"
+        ]]; then
+            VIDEO="$OPTIMIZED_VIDEO"
+        fi
+
         [[ -f "$VIDEO" ]] || exit 0
         [[ -x "$MEDIA_HELPER" ]] || exit 0
+        [[ -x "$IPC_HELPER" ]] || exit 0
         command -v mpvpaper >/dev/null 2>&1 || exit 0
 
-        stop_video_for_output "$OUTPUT"
+        SAFE_OUTPUT="$(safe_output_name "$OUTPUT")"
+        PIDFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.pid"
+        SOCKET="$VIDEO_STATE_DIR/$SAFE_OUTPUT.sock"
+        LOGFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.log"
 
+        if ! reuse_video_for_output "$OUTPUT" "$VIDEO" "$FRAME"; then
+            stop_video_for_output "$OUTPUT"
+            rm -f "$SOCKET"
+
+            # fd 9 owns the workspace switch flock. Close it in the child
+            # before exec so mpvpaper cannot keep the lock alive after this script exits.
+            setsid mpvpaper \
+                -o "loop-file=inf no-audio panscan=1.0 hwdec=auto-safe start=$FRAME input-ipc-server=$SOCKET" \
+                "$OUTPUT" \
+                "$VIDEO" \
+                </dev/null \
+                >>"$LOGFILE" 2>&1 \
+                9>&- &
+
+            MPV_PID=$!
+            printf '%s\n' "$MPV_PID" > "$PIDFILE"
+        fi
+
+        # Playback is already starting. Update Caelestia's adaptive palette
+        # behind mpvpaper without delaying the visible video.
         REFERENCE="$(
             "$MEDIA_HELPER" frame "$VIDEO" "$FRAME"
         )"
 
         [[ -f "$REFERENCE" ]] || exit 0
+
         is_current_workspace || exit 0
-
-        BEFORE_SCHEME="$(scheme_stamp)"
-
-        # Caelestia sees the selected still long enough to update its
-        # adaptive palette. mpvpaper is started only after that handoff.
         caelestia wallpaper -f "$REFERENCE"
-
-        wait_for_scheme_change "$BEFORE_SCHEME" || exit 0
-
-        is_current_workspace || exit 0
-
-        SAFE_OUTPUT="$(safe_output_name "$OUTPUT")"
-        PIDFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.pid"
-        LOGFILE="$VIDEO_STATE_DIR/$SAFE_OUTPUT.log"
-
-        # fd 9 owns the workspace switch flock. Close it in the child
-        # before exec so mpvpaper cannot keep the lock alive after this script exits.
-        setsid mpvpaper \
-            -o "loop-file=inf no-audio panscan=1.0 hwdec=auto-safe start=$FRAME" \
-            "$OUTPUT" \
-            "$VIDEO" \
-            </dev/null \
-            >>"$LOGFILE" 2>&1 \
-            9>&- &
-
-        MPV_PID=$!
-        printf '%s\n' "$MPV_PID" > "$PIDFILE"
         ;;
 
     random)

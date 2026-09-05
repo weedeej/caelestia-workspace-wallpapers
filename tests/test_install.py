@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -66,9 +67,12 @@ class InstallTest(unittest.TestCase):
         self.assertTrue((
             self.home / ".local/share/applications/workspace-wallpapers.desktop"
         ).is_file())
-        self.assertTrue((
-            self.home / ".config/caelestia/workspace-wallpapers.json"
-        ).is_file())
+        config = self.home / ".config/caelestia/workspace-wallpapers.json"
+        self.assertTrue(config.is_file())
+        self.assertFalse(json.loads(config.read_text())["showWorkspaceNumber"])
+        self.assertEqual(
+            json.loads(config.read_text())["workspaceNumberPosition"], "center"
+        )
 
         stale_files = [
             installed_root / "app/RetiredComponent.qml",
@@ -76,7 +80,6 @@ class InstallTest(unittest.TestCase):
         ]
         for stale in stale_files:
             stale.touch()
-        config = self.home / ".config/caelestia/workspace-wallpapers.json"
         config.write_text('{"default": "preserved", "workspaces": {}}\n')
         self.run_script(INSTALL)
         for stale in stale_files:

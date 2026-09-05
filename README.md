@@ -74,6 +74,9 @@ quickshell/shell.qml
 quickshell/app/*.{qml,js}
   -> ~/.config/quickshell/workspace-wallpapers/app/
 
+quickshell/overlay/shell.qml
+  -> ~/.config/quickshell/workspace-wallpapers/overlay/shell.qml
+
 scripts/workspace-wallpaper
   -> ~/.config/caelestia/scripts/workspace-wallpaper
 
@@ -96,8 +99,8 @@ desktop/workspace-wallpapers.desktop
 `workspace-wallpaper-transfer` is the single configuration CLI used for
 wallpaper assignment, import, and export operations.
 
-`shell.qml` is only the Quickshell entry point. The application implementation
-and reusable controls live in its private `app/` directory.
+The top-level `shell.qml` is the utility entry point. The application lives in
+`app/`, while `overlay/shell.qml` renders the transient workspace number.
 
 Your config lives at:
 
@@ -140,6 +143,8 @@ Or launch **Workspace Wallpapers** from your application launcher.
 
 ```json
 {
+  "showWorkspaceNumber": false,
+  "workspaceNumberPosition": "center",
   "default": "/home/user/Pictures/Wallpapers/default.jpg",
   "workspaces": {
     "2": "/home/user/Pictures/Wallpapers/work.jpg",
@@ -160,6 +165,13 @@ Or launch **Workspace Wallpapers** from your application launcher.
 ```
 
 An absent workspace key means inherit the default.
+
+Enable **Show workspace number on switch** in the utility to briefly fade a
+large, background-free workspace number in and out after each switch. A switch
+during the animation replaces the number and restarts the fade. Its position can
+be set to Top left, Top right, Center, Bottom left, or Bottom right. The settings
+are stored as `showWorkspaceNumber` and `workspaceNumberPosition`; absent values
+default to `false` and `center`.
 
 Image entries remain plain absolute file paths for backward compatibility.
 

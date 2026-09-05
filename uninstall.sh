@@ -2,6 +2,8 @@
 set -euo pipefail
 
 rm -f "$HOME/.config/quickshell/workspace-wallpapers/shell.qml"
+rm -f "$HOME/.config/quickshell/workspace-wallpapers/overlay/shell.qml"
+rmdir "$HOME/.config/quickshell/workspace-wallpapers/overlay" 2>/dev/null || true
 rm -f -- "$HOME/.config/quickshell/workspace-wallpapers/app/"*.qml
 rm -f -- "$HOME/.config/quickshell/workspace-wallpapers/app/"*.js
 rmdir "$HOME/.config/quickshell/workspace-wallpapers/app" 2>/dev/null || true

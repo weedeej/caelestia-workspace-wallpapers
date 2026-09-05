@@ -33,6 +33,15 @@ QQ.QtObject {
     property bool transferMatching: false
     property string wallpaperPath: ""
     property real wallLuminance: 0
+    readonly property bool showWorkspaceNumber:
+        configData && configData.showWorkspaceNumber === true
+    readonly property var workspaceNumberPositions:
+        ["top-left", "top-right", "center", "bottom-left", "bottom-right"]
+    readonly property var workspaceNumberPositionLabels:
+        ["Top left", "Top right", "Center", "Bottom left", "Bottom right"]
+    readonly property string workspaceNumberPosition:
+        workspaceNumberPositions.indexOf(configData.workspaceNumberPosition) >= 0
+            ? configData.workspaceNumberPosition : "center"
 
     readonly property bool light:
         schemeData && String(schemeData.mode || "") === "light"

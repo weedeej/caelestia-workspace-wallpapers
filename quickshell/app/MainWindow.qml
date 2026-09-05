@@ -100,6 +100,12 @@ FloatingWindow {
                             popupParent: themeLayer
                         }
 
+                        WorkspaceNumberSettings {
+                            Layouts.Layout.fillWidth: true
+                            state: window.state
+                            configService: window.configService
+                        }
+
                         WorkspaceOverview {
                             Layouts.Layout.fillWidth: true
                             state: window.state

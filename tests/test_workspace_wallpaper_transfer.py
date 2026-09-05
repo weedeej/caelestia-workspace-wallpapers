@@ -54,8 +54,12 @@ class WorkspaceWallpaperTransferTest(unittest.TestCase):
             str(self.optimized_video), "1920", "1080",
         )
         self.run_cli("set-video", "4", str(self.video), "0", "5")
+        self.run_cli("set-show-workspace-number", "true")
+        self.run_cli("set-workspace-number-position", "bottom-right")
 
         config = self.read_config()
+        self.assertTrue(config["showWorkspaceNumber"])
+        self.assertEqual(config["workspaceNumberPosition"], "bottom-right")
         self.assertEqual(config["default"], str(self.image))
         self.assertEqual(config["workspaces"]["2"], "__CAELESTIA_RANDOM__")
         self.assertEqual(config["workspaces"]["3"]["path"], str(self.video))
@@ -109,6 +113,22 @@ class WorkspaceWallpaperTransferTest(unittest.TestCase):
         self.assertEqual(
             hashlib.sha256(self.config_path.read_bytes()).digest(), before
         )
+
+    def test_show_workspace_number_requires_boolean(self):
+        result = self.run_cli(
+            "set-show-workspace-number", "yes", check=False
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.config_path.exists())
+
+    def test_workspace_number_position_requires_known_position(self):
+        result = self.run_cli(
+            "set-workspace-number-position", "middle", check=False
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.config_path.exists())
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ IMAGE_DIR="$HOME/Pictures/Wallpapers"
 RANDOM_VALUE="__CAELESTIA_RANDOM__"
 MEDIA_HELPER="$HOME/.config/caelestia/scripts/workspace-wallpaper-media"
 IPC_HELPER="$HOME/.config/caelestia/scripts/workspace-wallpaper-ipc"
+OVERLAY_DIR="$HOME/.config/quickshell/workspace-wallpapers/overlay"
 
 WORKSPACE="${1:-}"
 [[ -n "$WORKSPACE" ]] || exit 0
@@ -13,6 +14,7 @@ WORKSPACE="${1:-}"
 
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 STATE="$RUNTIME_DIR/caelestia-workspace-wallpaper"
+OVERLAY_STATE="$RUNTIME_DIR/caelestia-workspace-wallpaper-overlay"
 LOCK="$RUNTIME_DIR/caelestia-workspace-wallpaper.lock"
 VIDEO_STATE_DIR="$RUNTIME_DIR/caelestia-workspace-wallpaper-video"
 
@@ -27,6 +29,22 @@ is_current_workspace() {
 }
 
 is_current_workspace || exit 0
+
+mapfile -t OVERLAY_CONFIG < <(
+    jq -r '[.showWorkspaceNumber == true,
+        (.workspaceNumberPosition // "center")] | .[]' "$CONFIG"
+)
+SHOW_WORKSPACE_NUMBER="${OVERLAY_CONFIG[0]:-false}"
+WORKSPACE_NUMBER_POSITION="${OVERLAY_CONFIG[1]:-center}"
+case "$WORKSPACE_NUMBER_POSITION" in
+    top-left|top-right|center|bottom-left|bottom-right) ;;
+    *) WORKSPACE_NUMBER_POSITION="center" ;;
+esac
+
+if [[ "$SHOW_WORKSPACE_NUMBER" == "true" ]]; then
+    printf '%s\n%s\n' "$WORKSPACE" "$WORKSPACE_NUMBER_POSITION" > "$OVERLAY_STATE"
+    qs -p "$OVERLAY_DIR" -n -d >/dev/null 2>&1 || true
+fi
 
 mapfile -t ENTRY_FIELDS < <(
     jq -r \

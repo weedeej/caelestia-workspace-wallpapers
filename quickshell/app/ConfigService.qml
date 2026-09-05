@@ -94,6 +94,29 @@ QQ.Item {
         ])
     }
 
+    function setShowWorkspaceNumber(enabled) {
+        if (busy)
+            return
+        state.configWriteError = ""
+        configWriter.pendingApplyWorkspace = -1
+        configWriter.closePickerOnSuccess = false
+        configWriter.exec([
+            state.helperPath, "set-show-workspace-number",
+            enabled ? "true" : "false"
+        ])
+    }
+
+    function setWorkspaceNumberPosition(position) {
+        if (busy)
+            return
+        state.configWriteError = ""
+        configWriter.pendingApplyWorkspace = -1
+        configWriter.closePickerOnSuccess = false
+        configWriter.exec([
+            state.helperPath, "set-workspace-number-position", position
+        ])
+    }
+
     function reloadConfig() {
         configFile.reload()
     }

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 QS_DIR="$HOME/.config/quickshell/workspace-wallpapers"
+OVERLAY_DIR="$QS_DIR/overlay"
 CAELESTIA_SCRIPTS="$HOME/.config/caelestia/scripts"
 APP_DIR="$HOME/.local/share/applications"
 CONFIG="$HOME/.config/caelestia/workspace-wallpapers.json"
@@ -25,6 +26,7 @@ fi
 mkdir -p \
     "$QS_DIR" \
     "$QS_DIR/app" \
+    "$OVERLAY_DIR" \
     "$CAELESTIA_SCRIPTS" \
     "$APP_DIR" \
     "$HOME/Pictures/Wallpapers" \
@@ -34,6 +36,10 @@ mkdir -p \
 install -m 0644 \
     "$ROOT/quickshell/shell.qml" \
     "$QS_DIR/shell.qml"
+
+install -m 0644 \
+    "$ROOT/quickshell/overlay/shell.qml" \
+    "$OVERLAY_DIR/shell.qml"
 
 shopt -s nullglob
 app_files=("$ROOT"/quickshell/app/*.qml "$ROOT"/quickshell/app/*.js)
@@ -81,6 +87,8 @@ install -m 0644 \
 if [[ ! -f "$CONFIG" ]]; then
     cat > "$CONFIG" <<EOF
 {
+  "showWorkspaceNumber": false,
+  "workspaceNumberPosition": "center",
   "default": "",
   "workspaces": {}
 }

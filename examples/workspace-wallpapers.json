@@ -1,4 +1,6 @@
 {
+  "showWorkspaceNumber": false,
+  "workspaceNumberPosition": "center",
   "default": "/absolute/path/to/default-wallpaper.jpg",
   "workspaces": {
     "2": "/absolute/path/to/workspace-2.jpg",

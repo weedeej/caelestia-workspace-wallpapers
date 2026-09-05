@@ -2,6 +2,14 @@
 
 A Quickshell utility for assigning image and video wallpapers per Hyprland workspace while preserving Caelestia's adaptive wallpaper and color workflow.
 
+<center>
+  
+
+https://github.com/user-attachments/assets/f6993dd7-f87d-4d03-8b5b-632715004739
+
+
+</center>
+
 ## Features
 
 - Explicit default wallpaper
